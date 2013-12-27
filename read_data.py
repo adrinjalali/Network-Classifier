@@ -11,10 +11,10 @@ from sklearn import svm;
 from sklearn import cross_validation as cv;
 from sklearn.metrics import roc_auc_score;
 import bidict;
+from collections import defaultdict
 #from itertools import izip;
 
 def read_csv(file_name, skip_header, delimiter = '\t'):
-    file = open(file_name, 'r');
     data = csv.reader(open(file_name, 'r'), delimiter=delimiter);
     if (skip_header): next(data);
     table = [row for row in data];
@@ -47,115 +47,93 @@ def get_genename_entrezids(genename, genename2entrez_array):
     entrezids = genename2entrez_array[np.where(genename2entrez_array[:,0] ==
                                                genename),1].reshape(-1)
     return entrezids;
+
+#functions to read methylation data
+def read_beta_values():
+    #beta values are already saved in an npz file.
+    tmp = np.load(Globals.beta_file)
+    return tmp['header'], tmp['met_sites'], tmp['beta']
     
 if __name__ == '__main__':
     print('hi');
     # read PPI network.
+    print('reading the network...')
     table = read_csv(Globals.ppi_file, True);
     refseq_ids = get_column(table, 0)
     refseq_ids.extend(get_column(table, 3));
     refseq_ids = list(set(refseq_ids));
     interactions = np.array(table)[:,[0,3]]
+    del table
 
-    #dump_list(refseq_ids, 'refseq_ids.txt');
-    genename2entrez_raw = read_csv(Globals.genename2entrez_file, True);
-    genename2entrez_array = np.array(genename2entrez_raw)[:,[0,2]];
-    genename2entrez = {}
-    entrez2genename = {}
-    for row in genename2entrez_raw:
-        genename2entrez[row[0]] = row[2];
-        #entrez2genename[row[2]] = row[0];
-
-    expressions = read_csv(Globals.expressions_file, False);
-
-    probe2gene_raw = read_csv(Globals.probe2gene_file, False);
-    probe2gene_array = np.array(probe2gene_raw);
-    probe2gene = {}
-    gene2probe = {}
-    for row in probe2gene_raw:
-        probe2gene[row[0]] = row[1];
-        #gene2probe[row[1]] = row[0];
-
-    tmp = np.asarray(expressions);
-        
-    expressions_array = tmp[1:,1:].T;
-    expressions_colnames = tmp[1:,0];
-    expressions_rownames = tmp[0,1:];
-
-    print("converting expression values to floats...");
-    tmp = np.empty(expressions_array.shape);
-    for i in range(tmp.shape[0]):
-        tmp[i,:] = [(np.nan if len(x.strip()) == 0 else float(x))
-                    for x in expressions_array[i,:]]
+    #read beta values
+    print('reading betas from binary dump...')
+    [sample_names, met_sites, beta] = read_beta_values()
+    beta = np.transpose(beta)
 
     print("replacing nans with medians...");
-    tmp_masked = np.ma.masked_array(tmp, [np.isnan(x) for x in tmp]);
+    tmp_masked = np.ma.masked_array(beta, [np.isnan(x) for x in beta]);
     medians = np.ma.median(tmp_masked, axis=0);
-    expressions_array = tmp_masked.filled(medians);
+    beta = tmp_masked.filled(medians);
+    del medians, tmp_masked
 
-    print("refactoring interactions into entrezid format...")
-    new_interactions = np.empty([0,2])
-    for i in range(interactions.shape[0]):
-        gene_1_list = get_genename_entrezids(interactions[i,0],
-                                             genename2entrez_array)
-        gene_2_list = get_genename_entrezids(interactions[i,1],
-                                             genename2entrez_array)
-        if gene_1_list.shape[0] > 0 and gene_2_list.shape[0] > 0:
-            for g1 in gene_1_list:
-                for g2 in gene_2_list:
-                    new_interactions = np.append(new_interactions, [[g1, g2]], 0);
+    print('reading gene2met mapping...')
+    gene2met_raw = read_csv(Globals.gene2met_file, skip_header=True, delimiter=',')
+    gene2met_raw = np.array(gene2met_raw)[:,[1,2]]
+    gene2met = defaultdict(set)
+    for i in range(gene2met_raw.shape[0]):
+        gene2met[gene2met_raw[i,1]].add(np.int32(gene2met_raw[i,0]))
+    del gene2met_raw
 
-    print("refactoring expressions into entrezid format...")
+    print("refactoring betas into genename format...")
     print("\tAlso calculating expression median for multiple mapped probes")
-    genes = set(genename2entrez_array[:,1])
+    genes = refseq_ids
     expressions_colgenes = list()
-    X = np.empty([expressions_array.shape[0],0])
-    for entrezid in genes:
-        indices = get_gene_expression_indices(entrezid,
-                                              expressions_colnames,
-                                              probe2gene_array)
+    X = np.empty([beta.shape[0],0])
+    for gene in genes:
+        indices = list(gene2met[gene])
         if (len(indices) == 0):
             continue;
-        expressions_colgenes.append(entrezid)
-        new_col = np.median(expressions_array[:,indices], axis=1)
+        expressions_colgenes.append(gene)
+        new_col = np.median(beta[:,indices], axis=1)
         X = np.append(X, new_col.reshape([-1,1]), 1)
+    del indices
 
     print("extracting common genes between expressions and network...");
-    usable_interaction_indices = [i for i in range(new_interactions.shape[0])
-                                  if new_interactions[i,0] in expressions_colgenes
-                                  and new_interactions[i,1] in expressions_colgenes]
-    common_genes = set(new_interactions[usable_interaction_indices,:].
-                       reshape(-1)).intersection(set(expressions_colgenes))
-    interactions = new_interactions[usable_interaction_indices,:]
-
-    print("rearrange expressions array into X...")
-    common_genes_list = list(common_genes)
-    rearrange_indices = [expressions_colgenes.index(gene)
-                         for gene in common_genes_list]
-    X = X[:,rearrange_indices]
+    usable_interaction_indices = [i for i in range(interactions.shape[0])
+                                  if interactions[i,0] in expressions_colgenes
+                                  and interactions[i,1] in expressions_colgenes]
+    interactions = interactions[usable_interaction_indices,:]
+    del usable_interaction_indices
 
     print("creating graph from network data...");
-    node_indices_t = bidict.namedbidict('node_indices_t', 'entrezids', 'indices')
-    node_indices = node_indices_t({common_genes_list[x]:x
-                                   for x in range(len(common_genes_list))})
     g = gt.Graph(directed=False);
-    vlist = g.add_vertex(len(node_indices))
+    vlist = g.add_vertex(len(expressions_colgenes))
     for i in range(interactions.shape[0]):
-        tmp_e = g.add_edge(node_indices.entrezids[interactions[i,0]],
-                           node_indices.entrezids[interactions[i,1]])
+        tmp_e = g.add_edge(expressions_colgenes.index(interactions[i,0]),
+        expressions_colgenes.index(interactions[i,1]))
+    del tmp_e, vlist
 
     print("reading sample descriptions and setting Y...")
-    descriptions_raw = read_csv(Globals.description_file, True)
+    descriptions_raw = read_csv(Globals.sample_annotation_file, True, delimiter = ',')
     descriptions_array = np.array(descriptions_raw)
-    Y = np.empty([descriptions_array.shape[0]], dtype=np.int32)
+    # columns: id, sample.type, immunophenotype, subtype
+    sample_annotation = descriptions_array[:,[0,3,5,6]]
+    usable_samples = [i for i in range(sample_annotation.shape[0])
+                           if sample_annotation[i,1] == 'diagnosis']
+
+    Y = np.empty(len(usable_samples), dtype=np.int32)
     Y[:] = 0
-    Y[[i for i in range(Y.shape[0]) if descriptions_array[i,15] == 'Good']] = 1
-    Y[[i for i in range(Y.shape[0]) if descriptions_array[i,15] == 'Poor']] = -1
+    Y[[i for i in range(Y.shape[0])
+       if sample_annotation[usable_samples[i],2] == 'T-ALL']] = 1
+    Y[[i for i in range(Y.shape[0])
+       if sample_annotation[usable_samples[i],2] == 'BCP-ALL']] = -1
     samples = [i for i in range(Y.shape[0]) if Y[i] != 0]
     Y = Y[samples]
-    sample_names = descriptions_array[samples,0]
-    expression_sample_indices = [list(expressions_rownames).index(sample_names[i])
-                                      for i in range(sample_names.shape[0])]
+    usable_samples = [usable_samples[i] for i in samples]
+    
+    tmp_sample_names = sample_annotation[usable_samples,0]
+    expression_sample_indices = [list(sample_names).index(tmp_sample_names[i])
+                                      for i in range(tmp_sample_names.shape[0])]
     X = X[expression_sample_indices,:]
 
     print("calculating L and transformation of the data...")
@@ -166,18 +144,22 @@ if __name__ == '__main__':
     X_prime = X.dot(L)
 
     print("cross-validation...")
-    cfolds = cv.StratifiedShuffleSplit(Y, n_iter=Globals.cfold_count, test_size=0.2,
+    cfolds = cv.StratifiedShuffleSplit(Y, n_iter=Globals.cfold_count, test_size=0.30,
                                        random_state=0)
     train_auc = list()
     test_auc = list()
     train_tr_auc = list()
     test_tr_auc = list()
 
+    i = 0;
     for train_index, test_index in cfolds:
         machine = svm.NuSVC(nu=Globals.nu,
                             kernel='linear',
                             verbose=False,
                             probability=False)
+        print(i)
+        i = i + 1
+        print('normal')
         train_data = X[train_index,:]
         train_labels = Y[train_index]
         test_data = X[test_index,:]
@@ -188,6 +170,7 @@ if __name__ == '__main__':
         train_auc.append(roc_auc_score(train_labels, out))
         test_auc.append(roc_auc_score(test_labels, out_test))
 
+        print('transformed')
         train_data = X_prime[train_index,:]
         train_labels = Y[train_index]
         test_data = X_prime[test_index,:]

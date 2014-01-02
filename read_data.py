@@ -12,7 +12,7 @@ from sklearn import cross_validation as cv;
 from sklearn.metrics import roc_auc_score;
 import bidict;
 from collections import defaultdict
-#from itertools import izip;
+from itertools import chain
 
 def read_csv(file_name, skip_header, delimiter = '\t'):
     data = csv.reader(open(file_name, 'r'), delimiter=delimiter);
@@ -53,7 +53,28 @@ def read_beta_values():
     #beta values are already saved in an npz file.
     tmp = np.load(Globals.beta_file)
     return tmp['header'], tmp['met_sites'], tmp['beta']
+
+def read_methylation_annotation():
+    tmp = read_csv(Globals.met_annot_file, skip_header=True, delimiter=',')
+    tmp = [[row[i] for i in [1, 4, 9, 16, 17]] for row in tmp]
+    tmp = np.array(tmp)
+    tmp = tmp.view(dtype=[('TargetID', 'U367'),
+                          ('CHR', 'U367'),
+                          ('GeneNames', 'U367'),
+                          ('snp_hit', 'U367'),
+                          ('bwa_multi_hit', 'U367')])
+                           
+    tmp['CHR'][(tmp['CHR'] == 'X') | (tmp['CHR'] == 'Y')] = '23'
+    tmp['CHR'][tmp['CHR'] == 'NA'] = '24'
     
+    tmp = tmp.astype([('TargetID', 'U367'),
+                      ('CHR', 'int32'),
+                      ('GeneNames', 'U367'),
+                      ('snp_hit', 'U367'),
+                      ('bwa_multi_hit', 'U367')]).view(np.recarray)
+    return tmp
+    
+
 if __name__ == '__main__':
     print('hi');
     # read PPI network.
@@ -76,21 +97,34 @@ if __name__ == '__main__':
     beta = tmp_masked.filled(medians);
     del medians, tmp_masked
 
-    print('reading gene2met mapping...')
-    gene2met_raw = read_csv(Globals.gene2met_file, skip_header=True, delimiter=',')
-    gene2met_raw = np.array(gene2met_raw)[:,[1,2]]
-    gene2met = defaultdict(set)
-    for i in range(gene2met_raw.shape[0]):
-        gene2met[gene2met_raw[i,1]].add(np.int32(gene2met_raw[i,0]))
-    del gene2met_raw
-
+    print('reading methylation annotation data...')
+    met_annot = read_methylation_annotation()
+    site_idx = ((met_annot.CHR > 0) & (met_annot.CHR < 23) &
+                (met_annot.snp_hit == 'FALSE') &
+                (met_annot.bwa_multi_hit == 'FALSE')).reshape(-1)
+    met_annot = met_annot[site_idx,]
+    beta = beta[:, site_idx]
+    met_sites = met_sites[site_idx,]
+    probe_genes = set(chain(*chain(*met_annot.GeneNames.strip().split(';')))) - {''}
+    # gene2met contains indices of met_annot for each gene, after slicing
+    # using site_idx. the methylation data is also sliced using site_idx
+    # to have the same indices as met_annot, to be able to use gene2met on it.
+    gene2met = defaultdict(list)
+    met2gene = defaultdict(set)
+    for i in range(met_annot.shape[0]):
+        genes = set(chain(*met_annot[i].GeneNames.strip().split(';'))) - {''}
+        if (len(genes) > 0):
+            met2gene[met_annot[i].TargetID[0]] = genes
+            for gene in genes:
+                gene2met[gene].append(i)
+    
     print("refactoring betas into genename format...")
     print("\tAlso calculating expression median for multiple mapped probes")
     genes = refseq_ids
     expressions_colgenes = list()
     X = np.empty([beta.shape[0],0])
     for gene in genes:
-        indices = list(gene2met[gene])
+        indices = gene2met[gene]
         if (len(indices) == 0):
             continue;
         expressions_colgenes.append(gene)
@@ -120,6 +154,7 @@ if __name__ == '__main__':
     sample_annotation = descriptions_array[:,[0,3,5,6]]
     usable_samples = [i for i in range(sample_annotation.shape[0])
                            if sample_annotation[i,1] == 'diagnosis']
+    del descriptions_raw, descriptions_array
 
     Y = np.empty(len(usable_samples), dtype=np.int32)
     Y[:] = 0

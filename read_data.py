@@ -2,7 +2,6 @@ import sys;
 import os;
 import csv;
 import numpy as np;
-from constants import *;
 import graph_tool as gt;
 from graph_tool import draw;
 from graph_tool import spectral;
@@ -13,6 +12,9 @@ from sklearn.metrics import roc_auc_score;
 import bidict;
 from collections import defaultdict
 from itertools import chain
+
+from constants import *;
+from rat import *
 
 def read_csv(file_name, skip_header, delimiter = '\t'):
     data = csv.reader(open(file_name, 'r'), delimiter=delimiter);
@@ -74,7 +76,13 @@ def read_methylation_annotation():
                       ('bwa_multi_hit', 'U367')]).view(np.recarray)
     return tmp
     
-
+def print_stats(mine):
+    print("MIC", mine.mic())
+    print("MAS", mine.mas())
+    print("MEV", mine.mev())
+    print("MCN (eps=0)", mine.mcn(0))
+    print("MCN (eps=1-MIC)", mine.mcn_general())
+                        
 if __name__ == '__main__':
     print('hi');
     # read PPI network.
@@ -156,7 +164,7 @@ if __name__ == '__main__':
                            if sample_annotation[i,1] == 'diagnosis']
     del descriptions_raw, descriptions_array
 
-    Y = np.empty(len(usable_samples), dtype=np.int32)
+    Y = np.empty(len(usable_samples), dtype=int)
     Y[:] = 0
     Y[[i for i in range(Y.shape[0])
        if sample_annotation[usable_samples[i],2] == 'T-ALL']] = 1
@@ -170,7 +178,7 @@ if __name__ == '__main__':
     expression_sample_indices = [list(sample_names).index(tmp_sample_names[i])
                                       for i in range(tmp_sample_names.shape[0])]
     X = X[expression_sample_indices,:]
-
+                           
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
     M = np.identity(B.shape[0]) + Globals.beta * B
@@ -185,6 +193,10 @@ if __name__ == '__main__':
     test_auc = list()
     train_tr_auc = list()
     test_tr_auc = list()
+    train_rat_auc = list()
+    test_rat_auc = list()
+    train_rat_single_auc = list()
+    test_rat_single_auc = list()
 
     i = 0;
     for train_index, test_index in cfolds:
@@ -192,6 +204,7 @@ if __name__ == '__main__':
                             kernel='linear',
                             verbose=False,
                             probability=False)
+
         print(i)
         i = i + 1
         print('normal')
@@ -204,6 +217,9 @@ if __name__ == '__main__':
         out_test = machine.predict(test_data)
         train_auc.append(roc_auc_score(train_labels, out))
         test_auc.append(roc_auc_score(test_labels, out_test))
+        print('train ', train_auc)
+        print('test ', test_auc)
+
 
         print('transformed')
         train_data = X_prime[train_index,:]
@@ -215,11 +231,53 @@ if __name__ == '__main__':
         out_test = machine.predict(test_data)
         train_tr_auc.append(roc_auc_score(train_labels, out))
         test_tr_auc.append(roc_auc_score(test_labels, out_test))
+        print('train ', train_tr_auc)
+        print('test ', test_tr_auc)
+
+        print("Rat")
+        train_data = X[train_index,:]
+        train_labels = Y[train_index]
+        test_data = X[test_index,:]
+        test_labels = Y[test_index]
+
+        weak_learner = LogisticRegressionClassifier(C = 0.3)
+        
+        rat_model = Rat(train_data, train_labels, learner_count = 5,
+                        learner = weak_learner)
+        rat_model.train()
+        out = rat_model.predict(train_data)
+        out_test = rat_model.predict(test_data)
+        train_rat_auc.append(roc_auc_score(train_labels, out))
+        test_rat_auc.append(roc_auc_score(test_labels, out_test))
+        print('train ', train_rat_auc)
+        print('test ', test_rat_auc)
+
+        print("Rat 1 model")
+        train_data = X[train_index,:]
+        train_labels = Y[train_index]
+        test_data = X[test_index,:]
+        test_labels = Y[test_index]
+
+        rat_model_single = Rat(train_data, train_labels, learner_count = 1,
+                               learner = weak_learner)
+        rat_model_single.train()
+        out = rat_model_single.predict(train_data)
+        out_test = rat_model_single.predict(test_data)
+        train_rat_single_auc.append(roc_auc_score(train_labels, out))
+        test_rat_single_auc.append(roc_auc_score(test_labels, out_test))
+        print('train ', train_rat_single_auc)
+        print('test ', test_rat_single_auc)
+
+        break
 
     print("test auc: ", np.mean(test_auc))
     print("test transformed auc: ", np.mean(test_tr_auc))
+    print("test rat single auc: ", np.mean(test_rat_single_auc))
+    print("test rat auc: ", np.mean(test_rat_auc))
     print("train auc: ", np.mean(train_auc))
     print("train transformed auc: ", np.mean(train_tr_auc))
+    print("train rat single auc: ", np.mean(train_rat_single_auc))
+    print("train rat auc: ", np.mean(train_rat_auc))
 
     writer = csv.writer(open("results.csv", "w"))
     writer.writerow(['test_auc', 'train_auc', 'test_tr_auc', 'train_tr_auc'])

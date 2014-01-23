@@ -16,5 +16,5 @@ class Globals:
     met_annot_file = nordlund_data + '/met_annot.csv'
     
     beta = 10
-    cfold_count = 100
+    cfold_count = 20
     nu = 0.25

@@ -406,7 +406,7 @@ class Rat:
         for l in self.learners:
             for feature in l.getFeatures():
                 fc = self.feature_confidence_estimator.clone_init()
-                fc.initialize(X, feature, self.excluded_features)
+                fc.initialize(self.X, feature, self.excluded_features)
                 fc.train()
                 self.excluded_features.update(list(fc.getFeatures()))
                 l.setFeatureConfidenceEstimator(feature, fc)

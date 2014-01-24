@@ -51,6 +51,8 @@ def load_data():
     using the PPI network data.
     the global Globals object has everything this function needs to
     read the data.
+
+    The output is (X, y, graph, sample_annotation, feature_annotation)
     '''
     # read PPI network.
     print('reading the network...')
@@ -145,5 +147,7 @@ def load_data():
         tmp_e = g.add_edge(expressions_colgenes.index(interactions[i,0]),
         expressions_colgenes.index(interactions[i,1]))
     del tmp_e, vlist
-
-    return (X, Y, g, sample_annotation)
+    
+    sample_annotation = sample_annotation[np.array(usable_samples),].view(np.ndarray)
+    
+    return (X, Y, g, sample_annotation, np.array(expressions_colgenes))

@@ -52,12 +52,20 @@ def load_data(A, B):
     the global Globals object has everything this function needs to
     read the data.
     variable y would be 1 for subtypes in A and -1 for B subtypes.
+
+    The output is (X, y, graph, sample_annotation, feature_annotation)
     '''
 
     if (isinstance(A, list)):
         A = set(A)
+    if (isinstance(A, str)):
+        A = set([A])
+        
+    
     if (isinstance(B, list)):
         B = set(B)
+    if (isinstance(B, str)):
+        B = set([B])
 
     
     # read PPI network.

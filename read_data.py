@@ -8,7 +8,7 @@ from graph_tool import stats;
 from sklearn import svm;
 from sklearn import cross_validation as cv;
 from sklearn.metrics import roc_auc_score;
-import bidict;
+
 
 
 from constants import *;
@@ -16,24 +16,19 @@ from misc import *
 from rat import *
 import read_nordlund1 
 import read_nordlund2
-
-def get_gene_expression_indices(entrezid, expressions_colnames, probe2gene_array):
-    probes = probe2gene_array[np.where(probe2gene_array[:,1] ==
-                                       entrezid),0].reshape(-1)
-    probes = [x for x in probes if x in expressions_colnames]
-    indices = [i for i in range(expressions_colnames.shape[0])
-               if expressions_colnames[i] in probes]
-    return indices;
-
-def get_genename_entrezids(genename, genename2entrez_array):
-    entrezids = genename2entrez_array[np.where(genename2entrez_array[:,0] ==
-                                               genename),1].reshape(-1)
-    return entrezids;
+import read_vantveer
 
 if __name__ == '__main__':
     print('hi');
 
-    (tmpX, y, g, sample_annotation) = read_nordlund1.load_data()
+    ''' load nordlund T-ALL vs BCP-ALL '''
+    #(tmpX, y, g, sample_annotation, feature_annotation) = read_nordlund1.load_data()
+    ''' load  nordlund subtypes A vs subtypes B '''
+    #(tmpX, y, g,
+    # sample_annotation,
+    # feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
+    ''' load vantveer data poor vs good prognosis '''
+    (tmpX, y, g, sample_annotation, feature_annotation) = read_vantveer.load_data()
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
@@ -116,7 +111,7 @@ if __name__ == '__main__':
 
         weak_learner = LogisticRegressionClassifier(C = 0.3)
         
-        rat_model = Rat(train_data, train_labels, learner_count = 5,
+        rat_model = Rat(train_data, train_labels, learner_count = 10,
                         learner = weak_learner)
         rat_model.train()
         out = rat_model.predict(train_data)
@@ -127,14 +122,16 @@ if __name__ == '__main__':
         print('test ', test_rat_auc)
 
 
-    print("test auc: ", np.mean(test_auc))
-    print("test transformed auc: ", np.mean(test_tr_auc))
-    print("test rat single auc: ", np.mean(test_rat_single_auc))
-    print("test rat auc: ", np.mean(test_rat_auc))
-    print("train auc: ", np.mean(train_auc))
-    print("train transformed auc: ", np.mean(train_tr_auc))
-    print("train rat single auc: ", np.mean(train_rat_single_auc))
-    print("train rat auc: ", np.mean(train_rat_auc))
+    def statstr(v):
+        return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
+    print("test auc: ", statstr(test_auc))
+    print("test transformed auc: ", statstr(test_tr_auc))
+    print("test rat single auc: ", statstr(test_rat_single_auc))
+    print("test rat auc: ", statstr(test_rat_auc))
+    print("train auc: ", statstr(train_auc))
+    print("train transformed auc: ", statstr(train_tr_auc))
+    print("train rat single auc: ", statstr(train_rat_single_auc))
+    print("train rat auc: ", statstr(train_rat_auc))
 
     '''
     writer = csv.writer(open("results.csv", "w"))

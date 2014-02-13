@@ -164,4 +164,4 @@ def load_data(A, B):
 
     sample_annotation = sample_annotation[np.array(usable_samples),].view(np.ndarray)
 
-    return (X, Y, g, sample_annotation)
+    return (X, Y, g, sample_annotation, np.array(expressions_colgenes))

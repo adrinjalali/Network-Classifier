@@ -8,15 +8,18 @@ from graph_tool import stats;
 from sklearn import svm;
 from sklearn import cross_validation as cv;
 from sklearn.metrics import roc_auc_score;
+import sklearn.ensemble
+import sklearn.tree
+from collections import defaultdict
 
 
 
 from constants import *;
 from misc import *
-from rat import *
 import read_nordlund1 
 import read_nordlund2
 import read_vantveer
+from rat import *
 
 if __name__ == '__main__':
     print('hi');
@@ -38,16 +41,23 @@ if __name__ == '__main__':
     X_prime = tmpX.dot(L)
 
     print("cross-validation...")
-    cfolds = cv.StratifiedShuffleSplit(y, n_iter=Globals.cfold_count, test_size=0.30,
+    cfolds = cv.StratifiedShuffleSplit(y, n_iter=Globals.cfold_count, test_size=0.20,
                                        random_state=0)
-    train_auc = list()
-    test_auc = list()
-    train_tr_auc = list()
-    test_tr_auc = list()
-    train_rat_auc = list()
-    test_rat_auc = list()
-    train_rat_single_auc = list()
-    test_rat_single_auc = list()
+
+    def mini_job(experiment_type, machine, train_data, train_labels,
+                 test_data, test_labels):
+        print(experiment_type)
+        machine.fit(train_data, train_labels)
+        out = machine.predict(train_data)
+        out_test = machine.predict(test_data)
+        train_auc[experiment_type].append(roc_auc_score(train_labels, out))
+        test_auc[experiment_type].append(roc_auc_score(test_labels, out_test))
+        #print('train ', train_auc[experiment_type])
+        #print('test ', test_auc[experiment_type])
+        
+    
+    train_auc = defaultdict(list)
+    test_auc = defaultdict(list)
 
     i = 0;
     for train_index, test_index in cfolds:
@@ -58,80 +68,100 @@ if __name__ == '__main__':
 
         print(i)
         i = i + 1
-        print('normal')
-        train_data = tmpX[train_index,:]
-        train_labels = y[train_index]
-        test_data = tmpX[test_index,:]
-        test_labels = y[test_index]
-        machine.fit(train_data, train_labels)
-        out = machine.predict(train_data)
-        out_test = machine.predict(test_data)
-        train_auc.append(roc_auc_score(train_labels, out))
-        test_auc.append(roc_auc_score(test_labels, out_test))
-        print('train ', train_auc)
-        print('test ', test_auc)
 
-
-        print('transformed')
+        print("NICK transformed data")
         train_data = X_prime[train_index,:]
         train_labels = y[train_index]
         test_data = X_prime[test_index,:]
         test_labels = y[test_index]
-        machine.fit(train_data, train_labels)
-        out = machine.predict(train_data)
-        out_test = machine.predict(test_data)
-        train_tr_auc.append(roc_auc_score(train_labels, out))
-        test_tr_auc.append(roc_auc_score(test_labels, out_test))
-        print('train ', train_tr_auc)
-        print('test ', test_tr_auc)
 
-        print("Rat 1 model")
+        experiment_type = 'NICK svm'
+        mini_job(experiment_type, machine, train_data, train_labels,
+                 test_data, test_labels)
+
+
+        print("normal data")
         train_data = tmpX[train_index,:]
         train_labels = y[train_index]
         test_data = tmpX[test_index,:]
         test_labels = y[test_index]
+
+
+        experiment_type = 'normal svm'
+        mini_job(experiment_type, machine, train_data, train_labels,
+                 test_data, test_labels)
+
+
+        experiment_type = 'Gradient Boosting Classifier'
+        gbc_model = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
+                                                                max_depth = 2,
+                                                                n_estimators = 200)
+        mini_job(experiment_type, gbc_model, train_data, train_labels,
+                 test_data, test_labels)
+        
+
+        experiment_type = 'Adaboost Classifier'
+        abc_model = sklearn.ensemble.AdaBoostClassifier(
+            sklearn.tree.DecisionTreeClassifier(max_depth=1),
+            algorithm = "SAMME",
+            n_estimators = 100)
+        mini_job(experiment_type, abc_model, train_data, train_labels,
+                 test_data, test_labels)
+
+
+        
+        experiment_type = 'Rat 1 model'
+        print(experiment_type)
 
         weak_learner = LogisticRegressionClassifier(C = 0.3)
 
-        rat_model_single = Rat(train_data, train_labels, learner_count = 1,
-                               learner = weak_learner)
-        rat_model_single.train()
+        rat_model_single = Rat(learner_count = 1,
+                               learner = weak_learner, n_jobs = 30)
+        rat_model_single.fit(train_data, train_labels)
         out = rat_model_single.predict(train_data)
         out_test = rat_model_single.predict(test_data)
-        train_rat_single_auc.append(roc_auc_score(train_labels, out))
-        test_rat_single_auc.append(roc_auc_score(test_labels, out_test))
-        print('train ', train_rat_single_auc)
-        print('test ', test_rat_single_auc)
+        train_auc[experiment_type].append(roc_auc_score(train_labels, out))
+        test_auc[experiment_type].append(roc_auc_score(test_labels, out_test))
+        #print('train ', train_auc[experiment_type])
+        #print('test ', test_auc[experiment_type])
 
-        print("Rat 5 model")
-        train_data = tmpX[train_index,:]
-        train_labels = y[train_index]
-        test_data = tmpX[test_index,:]
-        test_labels = y[test_index]
+        
+
+        experiment_type = 'Rat 5 model'
+        print(experiment_type)
 
         weak_learner = LogisticRegressionClassifier(C = 0.3)
         
-        rat_model = Rat(train_data, train_labels, learner_count = 10,
-                        learner = weak_learner)
-        rat_model.train()
+        rat_model = Rat(learner_count = 5, learner = weak_learner, n_jobs = 30)
+        rat_model.fit(train_data, train_labels)
         out = rat_model.predict(train_data)
         out_test = rat_model.predict(test_data)
-        train_rat_auc.append(roc_auc_score(train_labels, out))
-        test_rat_auc.append(roc_auc_score(test_labels, out_test))
-        print('train ', train_rat_auc)
-        print('test ', test_rat_auc)
+        train_auc[experiment_type].append(roc_auc_score(train_labels, out))
+        test_auc[experiment_type].append(roc_auc_score(test_labels, out_test))
+        #print('train ', train_auc[experiment_type])
+        #print('test ', test_auc[experiment_type])
+
+        experiment_type = 'Rat 10 model'
+        print(experiment_type)
+
+        weak_learner = LogisticRegressionClassifier(C = 0.3)
+        
+        rat_model = Rat(learner_count = 10, learner = weak_learner, n_jobs = 30)
+        rat_model.fit(train_data, train_labels)
+        out = rat_model.predict(train_data)
+        out_test = rat_model.predict(test_data)
+        train_auc[experiment_type].append(roc_auc_score(train_labels, out))
+        test_auc[experiment_type].append(roc_auc_score(test_labels, out_test))
+        #print('train ', train_auc[experiment_type])
+        #print('test ', test_auc[experiment_type])
 
 
-    def statstr(v):
-        return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
-    print("test auc: ", statstr(test_auc))
-    print("test transformed auc: ", statstr(test_tr_auc))
-    print("test rat single auc: ", statstr(test_rat_single_auc))
-    print("test rat auc: ", statstr(test_rat_auc))
-    print("train auc: ", statstr(train_auc))
-    print("train transformed auc: ", statstr(train_tr_auc))
-    print("train rat single auc: ", statstr(train_rat_single_auc))
-    print("train rat auc: ", statstr(train_rat_auc))
+        def statstr(v):
+            return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
+        for key, value in test_auc.items():
+            print("test  auc %s: " % (key), statstr(value))
+        for key, value in train_auc.items():
+            print("train auc %s: " % (key), statstr(value))
 
     '''
     writer = csv.writer(open("results.csv", "w"))
@@ -142,3 +172,4 @@ if __name__ == '__main__':
     '''
 
     print('bye')
+

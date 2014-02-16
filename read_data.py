@@ -173,3 +173,53 @@ if __name__ == '__main__':
 
     print('bye')
 
+
+exec(open("./rat.py").read())
+a = LogisticRegressionClassifier(n_jobs = 30,
+                                 excluded_features=list([346,715,785]),
+                                 feature_confidence_estimator=PredictBasedFCE(),
+                                 second_layer_feature_count = 5,
+                                 C = 0.2)
+a.fit(tmpX, y)
+
+
+with open("/home/ajalali/.local/lib/python3.3/site-packages/sklearn/grid_search.py") as f:
+    code = compile(f.read(), "rat.py", 'exec')
+    exec(code)
+
+
+exec(open("./rat.py").read())
+
+with open("./rat.py") as f:
+    code = compile(f.read(), "rat.py", 'exec')
+    exec(code)
+a = Rat(learner_count = 5, learner = LogisticRegressionClassifier(C = 0.3,
+                                                                    n_jobs = 30))
+a.fit(tmpX, y)
+a.score(tmpX, y)
+
+
+from sklearn.grid_search import GridSearchCV
+cvs = cv.StratifiedKFold(y, 5)
+
+rat = Rat(learner_count = 10,
+          overlapping_features = True,
+          learner = LogisticRegressionClassifier(C = 0.3,
+                                                 second_layer_feature_count = 5,
+                                                 n_jobs = 30))
+learners = list()
+for c in [0.3, 0.4]:
+    for s in [5]:
+        learners.append(LogisticRegressionClassifier(C = c,
+                                                     second_layer_feature_count = s,
+                                                     n_jobs = 30))
+
+param_grid = {'learner_count': [5], 'learner': learners,
+              'overlapping_features':[False]}
+model = GridSearchCV(rat, param_grid = param_grid, scoring = 'roc_auc',
+                     n_jobs = 1, refit = True)
+scores = cv.cross_val_score(
+    model, tmpX, y,
+    cv=cvs,
+    scoring = 'roc_auc',
+    n_jobs=1)

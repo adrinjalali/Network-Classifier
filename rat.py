@@ -6,6 +6,7 @@
 '''
 
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.linear_model.base import LinearClassifierMixin
 import sklearn.base
 from sklearn.linear_model import LogisticRegression
 import sklearn.cross_validation as cv
@@ -14,6 +15,7 @@ from minepy import MINE
 import heapq
 import numpy as np
 from joblib import Parallel, delayed
+import copy
 
 class utilities:
     def exclude_cols(X, cols):
@@ -54,7 +56,7 @@ class BaseFeatureConfidenceEstimator(AbstractClass):
         self.X = X.view(np.ndarray)
         self.feature = feature
         self.scores = scores
-        self.excluded_features = np.copy(np.hstack((excluded_features, feature)))
+        self.excluded_features = np.union1d(excluded_features, [feature])
         self.my_X = utilities.exclude_cols(self.X, self.excluded_features)
         self._initialized = True
         self._trained = False
@@ -74,7 +76,6 @@ class BaseFeatureConfidenceEstimator(AbstractClass):
         
     def clone_init(self):
         raise NotImplementedError()
-
 
 
 def _evaluate_single(data, target_feature):
@@ -107,11 +108,12 @@ class PredictBasedFCE(BaseFeatureConfidenceEstimator):
     to the observed value, and the predicted_MSE of the GP, to
     calculate the confidence.
     '''
-    def __init__(self):
+    def __init__(self, feature_count):
         self._learner = gp.GaussianProcess(theta0=1e-2, thetaL=1e-4, thetaU=1e-1)
+        self.feature_count = feature_count
         
-    def fit(self, feature_count = 10):
-        self._selected_features = self._selectFeatures(k = feature_count)
+    def fit(self, X):
+        self._selected_features = self._selectFeatures(k = self.feature_count)
         self._learner.fit(self.my_X[:,self._selected_features],
                           self.X[:,self.feature])
         self._trained = True
@@ -125,9 +127,9 @@ class PredictBasedFCE(BaseFeatureConfidenceEstimator):
         MINE object, but it drastically increases the computation
         time, and the ordering of the features doesn't change much.
         '''
-        return([t[0] for t in heapq.nlargest(k,
-                                             enumerate(self.scores),
-                                             lambda t:t[1])])
+        return(np.array([t[0] for t in heapq.nlargest(k,
+                                                      enumerate(self.scores),
+                                                      lambda t:t[1])]))
 
     def predict(self, sample):
         self._checkTrained()
@@ -156,29 +158,11 @@ class PredictBasedFCE(BaseFeatureConfidenceEstimator):
         return(sigma2_pred / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
         #return(1 / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
 
-    '''
-    Using Gaussian Processes, there is no need for this function.
-    def calculateGeneralConfidence(self):
-        cols = self.getContributingFeatures()
-        local_X = self.X[:,cols]
-        rs = cv.ShuffleSplit(self.my_X.shape[0],
-                             n_iter = self.cross_validation_count,
-                             test_size = 0.2, indices = True)
-        test_aucs = list()
-        for train_idx, test_idx in rs:
-            self._learner.fit(local_X[train_idx,],
-                              self.X[:,self.feature][train_idx,:])
-            test_out = self._learner.predict(local_X[test_idx,])
-            test_aucs.append(roc_auc_score(self.X[:,feature][test_idx,:], test_out))
-
-        self.general_confidence = np.mean(test_aucs)
-    '''
-
     def getFeatures(self):
         self._checkTrained()
         local_cols = self._selected_features
         return(np.delete(np.arange(self.X.shape[1]),
-                         [self.excluded_features])[local_cols])
+                         self.excluded_features)[local_cols])
 
     def clone_init(self):
         other = self.__class__()
@@ -208,25 +192,18 @@ class PredictBasedFCE(BaseFeatureConfidenceEstimator):
         return(result)
         
 
-class WeakClassifier(AbstractClass):
-    def _fit(self, X, y):
-        self._learner.fit(X, y)
-
-    def _predict(self, sample):
-        return(self._learner.predict(sample))
-    
-    def initialize(self, X, y, sample_names=None, feature_names=None,
-                   excluded_features=None, feature_confidence_estimator=None,
-                   n_jobs = 1):
-        self.X = X.view(np.ndarray)
-        self.y = y.view(np.ndarray).squeeze()
-        self.sample_names = sample_names
-        self.feature_names = feature_names
-        self.n_jobs = n_jobs
-
-        if (feature_confidence_estimator == None):
-            self.feature_confidence_estimator = PredictBasedFCE()
+class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
+    def __init__(self):
+        pass
         
+    def __init__(self, learner, n_jobs = 1,
+                 excluded_features=None, feature_confidence_estimator=None,
+                 second_leayer_feature_count = 5):
+        self.learner = learner
+        self.n_jobs = n_jobs
+        self.second_layer_feature_count = 5
+        self.feature_confidence_estimator = feature_confidence_estimator
+
         if (isinstance(excluded_features, set) or
             isinstance(excluded_features, list)):
             excluded_features = np.array(list(excluded_features), dtype=int)
@@ -236,92 +213,71 @@ class WeakClassifier(AbstractClass):
         else:
             self.excluded_features = np.copy(excluded_features)
 
-        self.my_X = utilities.exclude_cols(self.X, self.excluded_features)
         self._FCEs = dict()
-        self._second_layer_features = set()
-        self._initialized = True
-        self._trained = False
+        self._second_layer_features = np.empty(0, dtype=int)
 
-    def _checkTrained(self):
-        if (not self._trained):
-            raise Exception("The model is not trained.")
-        
-    def fit(self):
-        self._fit(self.my_X, self.y)
-        self._trained = True
+    def get_params(self, deep=True):
+        return( {
+            'learner':self.learner,
+            'excluded_features':self.excluded_features,
+            'feature_confidence_estimator':self.feature_confidence_estimator,
+            'second_layer_feature_count':self.second_layer_feature_count,
+            'n_jobs':self.n_jobs})
+
+    def set_params(self, **parameters):
+        self.__init__(**parameters)
+
+    def _transform(self, X):
+        return(utilities.exclude_cols(X, self.excluded_features))
+    
+    def fit(self, X, y):
+        self._X_colcount = X.shape[1]
+        self.learner.fit(self._transform(X), y)
         classifier_features = self.getClassifierFeatures()
-        self._trained = False
 
         fe = SecondLayerFeatureEvaluator()
-        local_X = utilities.exclude_cols(self.X,
-                                    np.hstack((self.excluded_features,
-                                          classifier_features)))
-        scores = fe.evaluate(local_X, self.X[:,classifier_features],
+        local_excluded_features = np.union1d(self.excluded_features,
+                                             classifier_features)
+        local_X = utilities.exclude_cols(X,
+                                         local_excluded_features)
+        scores = fe.evaluate(local_X, X[:,classifier_features],
                              n_jobs = self.n_jobs)
         i = 0
         for feature in classifier_features:
             fc = self.feature_confidence_estimator.clone_init()
-            fc.initialize(self.X, feature,
+            fc.initialize(X, feature,
                           scores[i],
-                          self.excluded_features)
+                          local_excluded_features)
             fc.fit(feature_count = self.second_layer_feature_count)
             self.setFeatureConfidenceEstimator(feature, fc)
-            self._second_layer_features.update(list(fc.getFeatures()))
+            self._second_layer_features = np.union1d(
+                self._second_layer_features, fc.getFeatures())
             i += 1
-            
-        self._trained = True
-
-    def _transform(self, sample):
-        sample = sample.view(np.ndarray)
-        if (sample.ndim == 1):
-            sample = sample.reshape(1, -1)
-
-        my_sample = np.delete(sample, self.excluded_features)
-        return(my_sample)
+                    
+    def predict(self, X):
+        return(self.learner.predict(self._transform(X)))
         
-    def predict(self, sample):
-        self._checkTrained()
-        return(self._predict(self._transform(sample))[0])
-        
-    def predict_proba(self, sample):
-        self._checkTrained()
-        return(self._learner.predict_proba(self._transform(my_sample))[0])
+    def predict_proba(self, X):
+        return(self.learner.predict_proba(self._transform(X)))
 
     def decision_function(self, X):
-        self._checkTrained()
-        return(self._learner.decision_function(self._transform(X)))
+        return(self.learner.decision_function(self._transform(X)))
         
     def setFeatureConfidenceEstimator(self, feature, fc):
         self._FCEs[feature] = fc
 
-    def getConfidence(self, sample):
-        #if (not utilities.check_1d_array(sample)):
-        #    raise TypeError("sample should be 1d ndarray")
-
-        sample = sample.view(np.ndarray)
-        if (sample.ndim == 1):
-            sample = sample.reshape(1, -1)
-        
+    def getConfidence(self, X):
         result = 1.0
         feature_weights = self.getClassifierFeatureWeights()
-        weight_sum = 0
+        weight_sum = 0.0
         for key, fc in self._FCEs.items():
-            result += fc.getConfidence(sample) * abs(feature_weights[key])
+            result += fc.getConfidence(X) * abs(feature_weights[key])
             weight_sum += abs(feature_weights[key])
-        return((result[0] / weight_sum) * max(self.predict_proba(sample)))
+        return((result / weight_sum) * np.max(self.predict_proba(X), axis=1))
         
-    def clone_init(self):
-        other = self.__class__()
-        other._learner = sklearn.base.clone(self._learner)
-        if (hasattr(self, '_initialized')):
-            other.initialize(self.X, self.y, self.sample_names,
-                             self.feature_names, self.excluded_features)
-        return(other)
-
     def getAllFeatures(self):
-        features = set(self.getClassifierFeatures())
-        features.update(self._second_layer_features)
-        return(features)
+        features = self.getClassifierFeatures()
+        return(np.union1d(features, self._second_layer_features))
 
     def getClassifierFeatures(self):
         raise NotImplementedError()
@@ -329,246 +285,168 @@ class WeakClassifier(AbstractClass):
     def getClassifierFeatureWeights(self):
         raise NotImplementedError()
 
-    def __str__(self):
-        result = "### %s\n" % (self.__class__);
 
-        if (hasattr(self, '_initialized')):
-            result += "X (%s)\n" % (self.X.shape.__str__())
-            result += self.X.__str__() + "\n"
+class LogisticRegressionClassifier(BaseWeakClassifier):
+    def __init__(self, n_jobs = 1,
+                 excluded_features=None,
+                 feature_confidence_estimator=PredictBasedFCE(),
+                 second_layer_feature_count = 5,
+                 C = 0.2):
+        learner = LogisticRegression(penalty = 'l1',
+                                     dual = False,
+                                     C = C,
+                                     fit_intercept = True)
+        super(LogisticRegressionClassifier, self).__init__(
+            learner, n_jobs, excluded_features, feature_confidence_estimator,
+            second_layer_feature_count)
 
-            result += "y (%s)\n" % (self.y.shape.__str__())
-            result += self.y.__str__() + "\n"
-        
-            if (self.sample_names != None):
-                result += "sample names (%s)\n%s\n" % (
-                    self.sample_names.shape.__str__(),
-                    self.sample_names.__str__())
+    def get_params(self, deep=True):
+        return( {
+            'C':self.learner.get_params()['C'],
+            'excluded_features':self.excluded_features,
+            'feature_confidence_estimator':self.feature_confidence_estimator,
+            'second_layer_feature_count':self.second_layer_feature_count,
+            'n_jobs':self.n_jobs})
 
-            if (self.feature_names != None):
-                result += "feature names (%s)\n%s\n" % (
-                    self.feature_names.shape.__str__(),
-                    self.feature_names.__str__())
-        
-            result += "excluded_features (%s):\n%s\n" % (
-                self.excluded_features.shape.__str__(),
-                self.excluded_features.__str__())
+    def set_params(self, **parameters):
+        self.__init__(**parameters)
 
-            result += "my_X (%s)\n%s\n" % (
-                self.my_X.shape.__str__(),
-                self.my_X.__str__())
-        
-            result += "FCEs (%s)\n" % (len(self._FCEs))
-            for v in self._FCEs.values():
-                result += v.__str__() + "\n"
-
-        return(result)
-
-class LogisticRegressionClassifier(WeakClassifier):
-    def __init__(self, C = 0.2, second_layer_feature_count = 5):
-        self._learner = LogisticRegression(penalty = 'l1',
-                                           dual = False,
-                                           C = C,
-                                           fit_intercept = True)
-        self.second_layer_feature_count = second_layer_feature_count
-        
-        '''self._learner = RandomizedLogisticRegression(C = 1,
-                                                     sample_fraction = 0.8,
-                                                     n_resampling = 1,
-                                                     selection_threshold = 0.25,
-                                                     fit_intercept = True,
-                                                     verbose = True,
-                                                     normalize = False,
-                                                     n_jobs = 1)'''
-        
     def getClassifierFeatures(self):
-        self._checkTrained()
-        scores = self._learner.coef_.flatten()
+        scores = self.learner.coef_.flatten()
         local_cols = np.arange(scores.shape[0])[(scores != 0),]
-        return(np.delete(np.arange(self.X.shape[1]),
-                         [self.excluded_features])[local_cols])
+        print('lc', local_cols)
+        print('ef', self.excluded_features)
+        print('xc', self._X_colcount)
+        return(np.delete(np.arange(self._X_colcount),
+                         self.excluded_features)[local_cols])
 
     def getClassifierFeatureWeights(self):
-        self._checkTrained()
-        scores = self._learner.coef_.flatten()
+        scores = self.learner.coef_.flatten()
         scores = scores[(scores != 0),]
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
 
-    def __str__(self):
-        result = super(LogisticRegressionClassifier, self).__str__() + "\n"
-        result += self._learner.__str__()
-        return(result)
-
-
-class Rat(BaseEstimator, ClassifierMixin):
+class Rat(BaseEstimator, LinearClassifierMixin):
     def __init__(self):
         pass
         
     def __init__(self, 
                  learner_count=10,
-                 learner=LogisticRegressionClassifier(),
-                 feature_confidence_estimator=PredictBasedFCE(),
-                 overlapping_features=False,
-                 n_jobs = 1):
+                 learner=None,
+                 overlapping_features=False):
         
         try:
             learner_count = int(learner_count)
         except:
             raise TypeError("learner_count should be an int")
 
-        if (not isinstance(learner, WeakClassifier)):
-            raise TypeError("learner should be of WeakClassifier")
-
-        if (not isinstance(feature_confidence_estimator,
-                           BaseFeatureConfidenceEstimator)):
-            raise TypeError("feature_confidence_estimator should be of\
-                            BaseFeatureConfidenceEstimator")
-
         if (not isinstance(overlapping_features, bool)):
             raise TypeError("overlapping_features should be a Boolean.")
 
         self.learner_count = learner_count
-        self.learner = learner
-        self.feature_confidence_estimator = feature_confidence_estimator
+        if (learner == None):
+            self.learner = LogisticRegressionClassifier(n_jobs = 1)
+        else:
+            self.learner = learner
         self.overlapping_features = overlapping_features
         self.learners = []
-        self.n_jobs = n_jobs
-        self.excluded_features = set()
-        self._trained = False
-
-    def _checkTrained(self):
-        if (not self._trained):
-            raise Exception("The model is not trained.")
-
-    def getSingleLearner(self):
-        while True:
-            rs = cv.ShuffleSplit(n=self.X.shape[0], n_iter=1,
-                                 train_size=0.9)
-            l = self.learner.clone_init()
-            
-            for train_index, test_index in rs:
-                if (self.overlapping_features):
-                    l.initialize(self.X[train_index,:], self.y[train_index,],
-                                 sample_names=self.sample_names,
-                                 feature_names=self.feature_names,
-                                 n_jobs = self.n_jobs)
-                else:
-                    l.initialize(self.X[train_index,:], self.y[train_index,],
-                                 sample_names=self.sample_names,
-                                 feature_names=self.feature_names,
-                                 excluded_features=self.excluded_features,
-                                 n_jobs = self.n_jobs)
-            l.fit()
-            if (len(list(l.getClassifierFeatures())) > 0):
-                break
-        return(l)
-        
-    def fit(self, X, y, feature_names=None, sample_names=None):
-        if ((not isinstance(X, np.ndarray)) or
-            X.ndim != 2):
-            raise TypeError("X should be 2d ndarray")
-        if (not utilities.check_1d_array(y)):
-            raise TypeError("Y should be 1d ndarray")
-
-        if (feature_names == None):
-            self.feature_names = np.arange(X.shape[1])
-        else:
-            self.feature_names = feature_names
-
-        if (sample_names == None):
-            self.sample_names = np.arange(X.shape[0])
-        else:
-            self.sample_names = sample_names
-
-        self.X = X.view(np.ndarray)
-        self.y = y.view(np.ndarray).squeeze()
-
-        if (self._trained):
-            print("Warning: Rat is being retrained!")
-
-        self.learners = []
-        self.excluded_features = set()
-        for i in range(self.learner_count):
-            tmp = self.getSingleLearner()
-            self.learners.append(tmp)
-            #print(tmp.getFeatures())
-            self.excluded_features.update(list(tmp.getAllFeatures()))
-            
-        self._trained = True
-
-    def _predict(self, item, return_details = False):
-        self._checkTrained()
-        
-        item = item.view(np.ndarray)
-        if (item.ndim == 1):
-            item = item.reshape(1, -1)
-
-        predictions = []
-        confidences = []
-        for l in self.learners:
-            predictions.append(l.predict(item))
-            confidences.append(l.getConfidence(item))
-
-        if (len(self.learners) > 1):
-            #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-            result = np.average(predictions, weights=confidences)
-        else:
-            result = predictions[0]
-        if (return_details):
-            return((result, predictions, confidences))
-        else:
-            return(result)
-
-    def predict(self, item, return_details = False):
-        self._checkTrained()
-
-        if (not isinstance(item, np.ndarray) or
-            item.ndim > 2):
-            raise TypeError("item should be 1d or 2d ndarray")
-
-        item = item.view(np.ndarray)
-
-        if (item.ndim == 1):
-            return(self._predict(item, return_details))
-        else:
-            result = list()
-            for i in range(item.shape[0]):
-                result.append(self._predict(item[i,:], return_details))
-            return(result)
-
-    def decision_function(self, X):
-        self._checkTrained()
-
-        predictions = []
-        confidences = []
-        for l in self.learners:
-            predictions.append(l.decision_function(X))
-            confidences.append(l.getConfidence(X))
-
-        if (len(self.learners) > 1):
-            #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-            result = np.average(predictions, weights=confidences)
-        else:
-            result = predictions[0]
-        if (return_details):
-            return((result, predictions, confidences))
-        else:
-            return(result)
-        
+        self.excluded_features = np.empty(0, dtype=int)
 
     def get_params(self, deep=True):
         return( {
             'learner_count':self.learner_count,
             'learner':self.learner,
-            'feature_confidence_estimator':self.feature_confidence_estimator,
-            'overlapping_features':self.overlapping_features,
-            'n_jobs':self.n_jobs})
+            'overlapping_features':self.overlapping_features})
 
     def set_params(self, **parameters):
         self.__init__(**parameters)
 
 
+    def getSingleLearner(self, X, y):
+        for i in range(5):
+            rs = cv.ShuffleSplit(n=X.shape[0], n_iter=1,
+                                 train_size=0.9)
+            l = sklearn.clone(self.learner)
+            
+            for train_index, test_index in rs:
+                if (self.overlapping_features):
+                    l.excluded_features = np.empty(0, dtype=int)
+                else:
+                    l.excluded_features = np.copy(self.excluded_features)
+            l.fit(X[train_index,], y[train_index,])
+            if (len(list(l.getClassifierFeatures())) > 0):
+                return (l)
+        raise(RuntimeError("Tried 5 times to fit a learner, all chose no features."))
+        
+    def fit(self, X, y):
+        print(self)
+        self.X = X.view(np.ndarray)
+        self.y = y.view(np.ndarray).squeeze()
 
+        self.classes_, y = sklearn.utils.fixes.unique(y, return_inverse=True)
+
+        self.learners = []
+        self.excluded_features = np.empty(0, dtype=int)
+        for i in range(self.learner_count):
+            tmp = self.getSingleLearner(X, y)
+            self.learners.append(tmp)
+            #print(tmp.getFeatures())
+            self.excluded_features = np.union1d(
+                self.excluded_features, tmp.getAllFeatures())
+    '''            
+    def predict(self, X, return_details = False):
+        D = self.decision_function(X)
+        return self.classes_[np.argmax(D, axis=1)]
+    '''
+    def decision_function(self, X, return_details=False):
+
+        predictions = np.empty((X.shape[0],0), dtype=float)
+        confidences = np.empty((X.shape[0],0), dtype=float)
+        for l in self.learners:
+            predictions = np.hstack((predictions,
+                                     l.decision_function(X).reshape(-1,1)))
+            confidences = np.hstack((confidences,
+                                     l.getConfidence(X).reshape(-1,1)))
+
+        if (len(self.learners) > 1):
+            #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
+            result = np.average(predictions, weights=confidences, axis=1)
+        else:
+            result = predictions
+        if (return_details):
+            return((result, predictions, confidences))
+        else:
+            return(result)
+        
+'''            
+predictions = np.empty((97,0), dtype=float)
+confidences = np.empty((97,0), dtype=float)
+for l in rat.learners:
+    predictions = np.hstack((predictions, l.decision_function(tmpX).reshape(-1,1)))
+    confidences = np.hstack((confidences, l.getConfidence(tmpX).reshape(-1,1)))
+
+if (len(self.learners) > 1):
+    #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
+    result = np.average(predictions, weights=confidences)
+else:
+    result = predictions
+if (return_details):
+    return((result, predictions, confidences))
+else:
+    return(result)
+
+
+l = rat.learners[0]
+result = 1.0
+feature_weights = l.getClassifierFeatureWeights()
+weight_sum = 0.0
+for key, fc in l._FCEs.items():
+    result += fc.getConfidence(tmpX) * abs(feature_weights[key])
+    weight_sum += abs(feature_weights[key])
+res = ((result / weight_sum) * np.max(l.predict_proba(tmpX), axis=1))
+'''
+
+    
 def rat_parameter_search(X, y, weak_learner_count = [5, 10, 15],
                          second_leayer_feature_count = [5, 10],
                          regularization_parameter = [0.2, 0.3, 0.4]):

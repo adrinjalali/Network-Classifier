@@ -27,56 +27,6 @@ class utilities:
                                               a.shape[0] == 1 or
                                               a.shape[1] == 1))
 
-class AbstractClassException(Exception):
-    pass
-
-class AbstractClass:
-    def __init__(self):
-        raise AbstractClassException()
-
-class BaseFeatureConfidenceEstimator(AbstractClass):
-    '''Evaluate validity of a single feture
-    Every Confidence Estimator should inherit this class.'''
-    def initialize(self, X, feature, scores, excluded_features):
-        if (not isinstance(X, np.ndarray)):
-            raise TypeError("X should be ndarray")
-            
-        try:
-            feature = int(feature)
-        except Exception:
-            raise TypeError("feature should be int")
-
-        if (isinstance(excluded_features, set) or
-            isinstance(excluded_features, list)):
-            excluded_features = np.array(list(excluded_features), dtype=int)
-            
-        if not utilities.check_1d_array(excluded_features):
-            raise TypeError("excluded features should be 1d ndarray")
-
-        self.X = X.view(np.ndarray)
-        self.feature = feature
-        self.scores = scores
-        self.excluded_features = np.union1d(excluded_features, [feature])
-        self.my_X = utilities.exclude_cols(self.X, self.excluded_features)
-        self._initialized = True
-        self._trained = False
-
-    def _checkTrained(self):
-        if (not self._trained):
-            raise Exception("The model is not trained.")
-
-    def getConfidence(self, sample):
-        raise NotImplementedError()
-
-    def fit(self):
-        raise NotImplementedError()
-
-    def getFeatures(self):
-        raise NotImplementedError()
-        
-    def clone_init(self):
-        raise NotImplementedError()
-
 
 def _evaluate_single(data, target_feature):
     mine = MINE(alpha=0.3, c=15)
@@ -101,24 +51,61 @@ class SecondLayerFeatureEvaluator:
             
         return(result)
 
-class PredictBasedFCE(BaseFeatureConfidenceEstimator):
+class PredictBasedFCE(BaseEstimator):
     ''' This class uses Gaussian Processes as the regression
     algorithm. It uses Mutual Information to select features
     to give to the GP, and at the end uses GP's output, compared
     to the observed value, and the predicted_MSE of the GP, to
     calculate the confidence.
     '''
-    def __init__(self, feature_count):
-        self._learner = gp.GaussianProcess(theta0=1e-2, thetaL=1e-4, thetaU=1e-1)
+    def __init__(self, feature_count=5):
+        self._learner = gp.GaussianProcess()
+        #self._learner = gp.GaussianProcess(theta0=1e-2, thetaL=1e-4,
+        #                                   thetaU=1e-1, optimizer='Welch')
         self.feature_count = feature_count
+
+    def get_params(self, deep=True):
+        return({'feature_count' : self.feature_count})
+
+    def set_params(self, **parameters):
+        self.__init__(**parameters)
+        return(self)
         
-    def fit(self, X):
-        self._selected_features = self._selectFeatures(k = self.feature_count)
-        self._learner.fit(self.my_X[:,self._selected_features],
-                          self.X[:,self.feature])
+    def fit(self, X, feature, scores, excluded_features):
+        try:
+            feature = int(feature)
+        except Exception:
+            raise TypeError("feature should be int")
+
+        if (isinstance(excluded_features, set) or
+            isinstance(excluded_features, list)):
+            excluded_features = np.array(list(excluded_features), dtype=int)
+            
+        if not utilities.check_1d_array(excluded_features):
+            raise TypeError("excluded features should be 1d ndarray")
+
+        X = X.view(np.ndarray)
+        self._X_colcount = X.shape[1]
+        self.feature = feature
+        self.excluded_features = np.union1d(excluded_features, [feature])
+        my_X = utilities.exclude_cols(X, self.excluded_features)
+
+        self._selected_features = self._selectFeatures(scores = scores,
+                                                       k = self.feature_count)
+        #try:
+        self._learner.fit(my_X[:,self._selected_features],
+                          X[:,self.feature])
+        #except:
+        '''    print('gp failed.')
+        print('feature:', feature)
+        print('excluded_feature:', self.excluded_features)
+        print('selected cols:', self._selected_features)
+        print('X.shape, my_X.shape:', X.shape, my_X.shape)
+        raise(RuntimeError('gp failed.'))'''
         self._trained = True
+        return(self)
         
-    def _selectFeatures(self, k = 10):
+    def _selectFeatures(self, scores, k = 10):
         ''' computes mutual information of all features with
         the target feature. Note that excluded_features and the
         target feature are excluded from self.X in initialization.
@@ -128,68 +115,31 @@ class PredictBasedFCE(BaseFeatureConfidenceEstimator):
         time, and the ordering of the features doesn't change much.
         '''
         return(np.array([t[0] for t in heapq.nlargest(k,
-                                                      enumerate(self.scores),
+                                                      enumerate(scores),
                                                       lambda t:t[1])]))
 
-    def predict(self, sample):
-        self._checkTrained()
+    def predict(self, X):
+        X = X.view(np.ndarray)
+        if (X.ndim == 1):
+            X = X.reshape(1, -1)
         
-        #if (not utilities.check_1d_array(sample)):
-        #    raise TypeError("sample should be 1d ndarray")
-
-        sample = sample.view(np.ndarray)
-        if (sample.ndim == 1):
-            sample = sample.reshape(1, -1)
+        my_X = X[:,self.getFeatures()]
+        return(self._learner.predict(my_X))
         
-        my_sample = sample[:,self.getFeatures()]
-        return(self._learner.predict(my_sample))
+    def getConfidence(self, X):
+        X = X.view(np.ndarray)
+        if (X.ndim == 1):
+            X = X.reshape(1, -1)
         
-    def getConfidence(self, sample):
-        self._checkTrained()
-        #if (not utilities.check_1d_array(sample)):
-        #    raise TypeError("sample should be 1d ndarray")
-
-        sample = sample.view(np.ndarray)
-        if (sample.ndim == 1):
-            sample = sample.reshape(1, -1)
-        
-        my_sample = sample[:,self.getFeatures()]
-        y_pred, sigma2_pred = self._learner.predict(my_sample, eval_MSE=True)
-        return(sigma2_pred / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
+        my_X = X[:,self.getFeatures()]
+        y_pred, sigma2_pred = self._learner.predict(my_X, eval_MSE=True)
+        return(sigma2_pred / (abs(y_pred - X[:,self.feature]) + sigma2_pred))
         #return(1 / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
 
     def getFeatures(self):
-        self._checkTrained()
         local_cols = self._selected_features
-        return(np.delete(np.arange(self.X.shape[1]),
+        return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
-
-    def clone_init(self):
-        other = self.__class__()
-        other._learner = sklearn.base.clone(self._learner)
-        if (hasattr(self, '_initialized')):
-            other.initialize(self.X, self.feature, self.excluded_features)
-        return(other)
-
-    def __str__(self):
-        result = "### %s\n" % (self.__class__)
-
-        if (hasattr(self, '_initialized')):
-            result += "X (shape: %s):\n" % (self.X.shape.__str__())
-            result += self.X.__str__() + "\n"
-
-            result += "excluded_features(%s):\n%s\n" %(
-                self.excluded_features.shape.__str__(),
-                self.excluded_features.__str__())
-
-            result += "feature: %d\n" % (self.feature)
-            
-            result += "my_X (shape: %s):\n" % (self.my_X.shape.__str__())
-            result += self.my_X.__str__() + "\n"
-
-            result += self._learner.__str__()
-
-        return(result)
         
 
 class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
@@ -197,11 +147,9 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         pass
         
     def __init__(self, learner, n_jobs = 1,
-                 excluded_features=None, feature_confidence_estimator=None,
-                 second_leayer_feature_count = 5):
+                 excluded_features=None, feature_confidence_estimator=None):
         self.learner = learner
         self.n_jobs = n_jobs
-        self.second_layer_feature_count = 5
         self.feature_confidence_estimator = feature_confidence_estimator
 
         if (isinstance(excluded_features, set) or
@@ -221,11 +169,11 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             'learner':self.learner,
             'excluded_features':self.excluded_features,
             'feature_confidence_estimator':self.feature_confidence_estimator,
-            'second_layer_feature_count':self.second_layer_feature_count,
             'n_jobs':self.n_jobs})
 
     def set_params(self, **parameters):
         self.__init__(**parameters)
+        return(self)
 
     def _transform(self, X):
         return(utilities.exclude_cols(X, self.excluded_features))
@@ -244,15 +192,17 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
                              n_jobs = self.n_jobs)
         i = 0
         for feature in classifier_features:
-            fc = self.feature_confidence_estimator.clone_init()
-            fc.initialize(X, feature,
-                          scores[i],
-                          local_excluded_features)
-            fc.fit(feature_count = self.second_layer_feature_count)
+            fc = sklearn.base.clone(
+                self.feature_confidence_estimator).set_params(
+                    **self.feature_confidence_estimator.get_params())
+            fc.fit(X, feature,
+                   scores[i],
+                   local_excluded_features)
             self.setFeatureConfidenceEstimator(feature, fc)
             self._second_layer_features = np.union1d(
                 self._second_layer_features, fc.getFeatures())
             i += 1
+        return(self)
                     
     def predict(self, X):
         return(self.learner.predict(self._transform(X)))
@@ -265,6 +215,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         
     def setFeatureConfidenceEstimator(self, feature, fc):
         self._FCEs[feature] = fc
+        return(self)
 
     def getConfidence(self, X):
         result = 1.0
@@ -290,33 +241,31 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
                  excluded_features=None,
                  feature_confidence_estimator=PredictBasedFCE(),
-                 second_layer_feature_count = 5,
                  C = 0.2):
         learner = LogisticRegression(penalty = 'l1',
                                      dual = False,
                                      C = C,
                                      fit_intercept = True)
         super(LogisticRegressionClassifier, self).__init__(
-            learner, n_jobs, excluded_features, feature_confidence_estimator,
-            second_layer_feature_count)
+            learner, n_jobs, excluded_features, feature_confidence_estimator)
 
     def get_params(self, deep=True):
         return( {
             'C':self.learner.get_params()['C'],
             'excluded_features':self.excluded_features,
             'feature_confidence_estimator':self.feature_confidence_estimator,
-            'second_layer_feature_count':self.second_layer_feature_count,
             'n_jobs':self.n_jobs})
 
     def set_params(self, **parameters):
         self.__init__(**parameters)
+        return(self)
 
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
         local_cols = np.arange(scores.shape[0])[(scores != 0),]
-        print('lc', local_cols)
-        print('ef', self.excluded_features)
-        print('xc', self._X_colcount)
+        #print('lc', local_cols)
+        #print('ef', self.excluded_features)
+        #print('xc', self._X_colcount)
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
 
@@ -360,7 +309,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
 
     def set_params(self, **parameters):
         self.__init__(**parameters)
-
+        return(self)
 
     def getSingleLearner(self, X, y):
         for i in range(5):
@@ -379,7 +328,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         raise(RuntimeError("Tried 5 times to fit a learner, all chose no features."))
         
     def fit(self, X, y):
-        print(self)
+        #print(self)
         self.X = X.view(np.ndarray)
         self.y = y.view(np.ndarray).squeeze()
 
@@ -393,6 +342,9 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             #print(tmp.getFeatures())
             self.excluded_features = np.union1d(
                 self.excluded_features, tmp.getAllFeatures())
+            if (self.excluded_features.shape[0] > (X.shape[1] / 5)):
+                break
+        return(self)
     '''            
     def predict(self, X, return_details = False):
         D = self.decision_function(X)

@@ -11,6 +11,7 @@ import sklearn.base
 from sklearn.linear_model import LogisticRegression
 import sklearn.cross_validation as cv
 import sklearn.gaussian_process as gp
+import sklearn.svm
 from minepy import MINE
 import heapq
 import numpy as np
@@ -59,7 +60,7 @@ class PredictBasedFCE(BaseEstimator):
     calculate the confidence.
     '''
     def __init__(self, feature_count=5):
-        self._learner = gp.GaussianProcess()
+        self._learner = gp.GaussianProcess(nugget=1e-2)
         #self._learner = gp.GaussianProcess(theta0=1e-2, thetaL=1e-4,
         #                                   thetaU=1e-1, optimizer='Welch')
         self.feature_count = feature_count
@@ -114,9 +115,14 @@ class PredictBasedFCE(BaseEstimator):
         MINE object, but it drastically increases the computation
         time, and the ordering of the features doesn't change much.
         '''
-        return(np.array([t[0] for t in heapq.nlargest(k,
-                                                      enumerate(scores),
-                                                      lambda t:t[1])]))
+        res = (np.arange(len(scores))[scores >
+                                           np.max(scores) * 0.95])
+        if (res.shape[0] < 5):
+            res = (np.array([t[0] for t in heapq.nlargest(5,
+                                                          enumerate(scores),
+                                                          lambda t:t[1])]))
+        #print(res)
+        return(res)
 
     def predict(self, X):
         X = X.view(np.ndarray)
@@ -180,7 +186,8 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     
     def fit(self, X, y):
         self._X_colcount = X.shape[1]
-        self.learner.fit(self._transform(X), y)
+        #self.learner.fit(self._transform(X), y)
+        self.get_learner(X, y)
         classifier_features = self.getClassifierFeatures()
 
         fe = SecondLayerFeatureEvaluator()
@@ -224,7 +231,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         for key, fc in self._FCEs.items():
             result += fc.getConfidence(X) * abs(feature_weights[key])
             weight_sum += abs(feature_weights[key])
-        return((result / weight_sum) * np.max(self.predict_proba(X), axis=1))
+        return((result / weight_sum))# * np.max(self.predict_proba(X), axis=1))
         
     def getAllFeatures(self):
         features = self.getClassifierFeatures()
@@ -259,6 +266,34 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
     def set_params(self, **parameters):
         self.__init__(**parameters)
         return(self)
+
+    def get_learner(self, X, y):
+        local_X = self._transform(X)
+        cs = sklearn.svm.l1_min_c(
+            local_X, y, loss='l2') *np.logspace(0,2)
+        counts = []
+        self.learner = sklearn.svm.LinearSVC(C = 1.0,
+                                             penalty = 'l1',
+                                             dual = False)
+        for c in cs:
+            self.learner.set_params(C=c)
+            self.learner.fit(local_X, y)
+            counts.append(self.getClassifierFeatures().shape[0])
+
+        last_diff = counts[1] - counts[0]
+        last_change = 1
+        for i in range(2, len(counts)):
+            diff = counts[i] - counts[i-1]
+            if diff > 0:
+                last_change = i
+                last_diff = diff
+
+            if (counts[i] > 1):
+                if (i - last_diff > 3 or counts[i] > 10):
+                    break
+        self.learner.set_params(C=cs[last_change])
+        self.learner.fit(local_X, y)
+        return(self.learner)
 
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
@@ -322,7 +357,8 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                     l.excluded_features = np.empty(0, dtype=int)
                 else:
                     l.excluded_features = np.copy(self.excluded_features)
-            l.fit(X[train_index,], y[train_index,])
+            #l.fit(X[train_index,], y[train_index,])
+            l.fit(X, y)
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)
         raise(RuntimeError("Tried 5 times to fit a learner, all chose no features."))

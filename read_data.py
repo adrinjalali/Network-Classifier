@@ -26,11 +26,11 @@ if __name__ == '__main__':
     print('hi');
 
     ''' load nordlund T-ALL vs BCP-ALL '''
-    (tmpX, y, g, sample_annotation, feature_annotation) = read_nordlund1.load_data()
+    #(tmpX, y, g, sample_annotation, feature_annotation) = read_nordlund1.load_data()
     ''' load  nordlund subtypes A vs subtypes B '''
-    #(tmpX, y, g,
-    # sample_annotation,
-    # feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
+    (tmpX, y, g,
+     sample_annotation,
+     feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
     ''' load vantveer data poor vs good prognosis '''
     #(tmpX, y, g, sample_annotation, feature_annotation) = read_vantveer.load_data()
 
@@ -43,18 +43,18 @@ if __name__ == '__main__':
 
     print("cross-validation...")
 
-    def f(l, c, s):
+    def _f(l, c, s):
         rat = Rat(learner_count = l,
                   learner = LogisticRegressionClassifier(
                       C = c,
                       feature_confidence_estimator=PredictBasedFCE(
                           feature_count = s),
-                      n_jobs = 30))
+                      n_jobs = 1))
         scores = cv.cross_val_score(
             rat, tmpX, y,
             cv=cvs,
             scoring = 'roc_auc',
-            n_jobs=1,
+            n_jobs=30,
             verbose=1)
         return(scores)
         
@@ -66,123 +66,94 @@ if __name__ == '__main__':
             print("test  auc %s: " % (key), statstr(value))
 
     all_scores = defaultdict(list)
-    for i in range(10):
-        print("%%%%%% i : ", i)
-        cvs = cv.StratifiedKFold(y, 5)
+    cvs = cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2)
+    
+    machine = svm.NuSVC(nu=0.25,
+                        kernel='linear',
+                        verbose=False,
+                        probability=False)
+    scores = cv.cross_val_score(
+        machine, tmpX, y,
+        cv = cvs,
+        scoring = 'roc_auc',
+        n_jobs = 30,
+        verbose=1)
+    all_scores['original, nuSVM(0.25), linear'].append(scores)
 
-        machine = svm.NuSVC(nu=0.25,
-                            kernel='linear',
-                            verbose=False,
-                            probability=False)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = 30,
-            verbose=1)
-        all_scores['original, nuSVM(0.25), linear'].append(scores)
+    machine = svm.NuSVC(nu=0.25,
+                        kernel='rbf',
+                        verbose=False,
+                        probability=False)
+    scores = cv.cross_val_score(
+        machine, tmpX, y,
+        cv = cvs,
+        scoring = 'roc_auc',
+        n_jobs = 30,
+        verbose=1)
+    all_scores['original, nuSVM(0.25), rbf'].append(scores)
 
-        machine = svm.NuSVC(nu=0.25,
-                            kernel='rbf',
-                            verbose=False,
-                            probability=False)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = 30,
-            verbose=1)
-        all_scores['original, nuSVM(0.25), rbf'].append(scores)
+    machine = svm.NuSVC(nu=0.25,
+                        kernel='linear',
+                        verbose=False,
+                        probability=False)
+    scores = cv.cross_val_score(
+        machine, X_prime, y,
+        cv = cvs,
+        scoring = 'roc_auc',
+        n_jobs = 30,
+        verbose=1)
+    all_scores['transformed, nuSVM(0.25), linear'].append(scores)
 
-        machine = svm.NuSVC(nu=0.25,
-                            kernel='linear',
-                            verbose=False,
-                            probability=False)
-        scores = cv.cross_val_score(
-            machine, X_prime, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = 30,
-            verbose=1)
-        all_scores['transformed, nuSVM(0.25), linear'].append(scores)
+    machine = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
+                                                          max_depth = 2,
+                                                          n_estimators = 200)
+    scores = cv.cross_val_score(
+        machine, tmpX, y,
+        cv = cvs,
+        scoring = 'roc_auc',
+        n_jobs = 30,
+        verbose=1)
+    all_scores['gradientboostingclassifier'].append(scores)
 
-        machine = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
-                                                              max_depth = 2,
-                                                              n_estimators = 200)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = 30,
-            verbose=1)
-        all_scores['gradientboostingclassifier'].append(scores)
+    machine = sklearn.ensemble.AdaBoostClassifier(
+        sklearn.tree.DecisionTreeClassifier(max_depth=1),
+        algorithm = "SAMME",
+        n_estimators = 100)
+    scores = cv.cross_val_score(
+        machine, tmpX, y,
+        cv = cvs,
+        scoring = 'roc_auc',
+        n_jobs = 30,
+        verbose=1)
+    all_scores['adaboost'].append(scores)
+    
+    
+    log(all_scores)
+    
+    scores = _f(1, 0.3, 5)
+    all_scores['1,0.3,5'] = scores
+    log(all_scores)
+    
+    scores = _f(5, 0.3, 10)
+    all_scores['5,0.3,10'] = scores
+    log(all_scores)
+    
+    scores = _f(10, 0.3, 5)
+    all_scores['10,0.3,5'] = scores
+    log(all_scores)
+    
+    scores = _f(15, 0.3, 5)
+    all_scores['15,0.3,5'] = scores
+    log(all_scores)
+    
+    scores = _f(20, 0.3, 5)
+    all_scores['20,0.3,5'] = scores
+    log(all_scores)
 
-        machine = sklearn.ensemble.AdaBoostClassifier(
-            sklearn.tree.DecisionTreeClassifier(max_depth=1),
-            algorithm = "SAMME",
-            n_estimators = 100)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = 30,
-            verbose=1)
-        all_scores['adaboost'].append(scores)
-
-
-        log(all_scores)
-
-        scores = f(1, 0.3, 5)
-        all_scores['1,0.3,5'].append(scores)
-        log(all_scores)
-
-        scores = f(1, 0.4, 5)
-        all_scores['1,0.4,5'].append(scores)
-        log(all_scores)
-
-        scores = f(1, 0.3, 10)
-        all_scores['1,0.3,10'].append(scores)
-        log(all_scores)
-
-        scores = f(1, 0.4, 10)
-        all_scores['1,0.4,10'].append(scores)
-        log(all_scores)
-
-        scores = f(5, 0.3, 5)
-        all_scores['5,0.3,5'].append(scores)
-        log(all_scores)
-
-        scores = f(5, 0.3, 10)
-        all_scores['5,0.3,10'].append(scores)
-        log(all_scores)
-        
-        scores = f(10, 0.3, 5)
-        all_scores['10,0.3,5'].append(scores)
-        log(all_scores)
-        
-        scores = f(10, 0.3, 10)
-        all_scores['10,0.3,10'].append(scores)
-        log(all_scores)
-        
-        scores = f(5, 0.4, 5)
-        all_scores['5,0.4,5'].append(scores)
-        log(all_scores)
-        
-        scores = f(5, 0.4, 10)
-        all_scores['5,0.4,10'].append(scores)
-        log(all_scores)
-        
-        scores = f(10, 0.4, 5)
-        all_scores['10,0.4,5'].append(scores)
-        log(all_scores)
-        
-        scores = f(10, 0.4, 10)
-        all_scores['10,0.4,10'].append(scores)
-        log(all_scores)
-        '''
-        rat = Rat(learner_count = 10,
-                  learner = LogisticRegressionClassifier(
-                      C = 0.3,
+    '''
+    rat = Rat(learner_count = 10,
+    learner = LogisticRegressionClassifier(
+    C = 0.3,
                       feature_confidence_estimator=PredictBasedFCE(
                           feature_count = 5),
                       n_jobs = 1))
@@ -206,7 +177,7 @@ if __name__ == '__main__':
             verbose=1)
         all_scores['gridsearchcv'].append(scores)
         log(all_scores)
-        '''
+    '''
     print('bye')
 
 '''
@@ -225,10 +196,57 @@ with open("./rat.py") as f:
     exec(code)
 a = Rat(learner_count = 10,
         learner = LogisticRegressionClassifier(
-            C = 0.4,
+            C = 0.0,
             feature_confidence_estimator=PredictBasedFCE(
-                feature_count = 10),
+                feature_count = 5),
             n_jobs = 30))
 a.fit(tmpX, y)
 a.score(tmpX, y)
+scores = cv.cross_val_score(
+    a, tmpX, y,
+    cv=5,
+    scoring = 'roc_auc',
+    n_jobs = 1,
+    verbose=1)
+print(np.average(scores))
+
+
+cs = sklearn.svm.l1_min_c(tmpX, y, loss='l2') * np.logspace(0,2)
+start = datetime.now()
+#clf = LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
+clf = sklearn.svm.LinearSVC(C = 1.0, penalty='l1', dual=False)
+coefs_ = []
+for c in cs:
+    clf.set_params(C=c)
+    clf.fit(tmpX, y)
+    coefs_.append(clf.coef_.ravel().copy())
+print("This took ", datetime.now() - start)
+
+coefs_ = np.array(coefs_)
+pl.plot(np.log10(cs), coefs_)
+ymin, ymax = pl.ylim()
+pl.xlabel('log(C)')
+pl.ylabel('Coefficients')
+pl.title('Logistic Regression Path')
+pl.axis('tight')
+pl.show()
+
+
+counts = [sum([1 for i in range(coefs_.shape[1])
+               if coefs_[j,i] != 0])
+          for j in range(coefs_.shape[0])]
+
+last_diff = counts[1] - counts[0]
+last_change = 1
+for i in range(2, len(counts)):
+    diff = counts[i] - counts[i-1]
+    if diff > 0:
+        last_change = i
+        last_diff = diff
+
+    print(diff, last_change)
+    if (i - last_diff > 3 or counts[i] > 10):
+        break
+
+print(last_diff, last_change)
 '''

@@ -215,7 +215,8 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         return(self.learner.predict(self._transform(X)))
         
     def predict_proba(self, X):
-        return(self.learner.predict_proba(self._transform(X)))
+        if (hasattr(self.learner, 'predict_proba')):
+            return(self.learner.predict_proba(self._transform(X)))
 
     def decision_function(self, X):
         return(self.learner.decision_function(self._transform(X)))
@@ -231,7 +232,10 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         for key, fc in self._FCEs.items():
             result += fc.getConfidence(X) * abs(feature_weights[key])
             weight_sum += abs(feature_weights[key])
-        return((result / weight_sum))# * np.max(self.predict_proba(X), axis=1))
+        if (hasattr(self.learner, 'predict_proba')):
+            return((result / weight_sum) * np.max(self.predict_proba(X), axis=1))
+        else:
+            return((result / weight_sum) * abs(self.decision_function(X)))
         
     def getAllFeatures(self):
         features = self.getClassifierFeatures()
@@ -243,6 +247,9 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def getClassifierFeatureWeights(self):
         raise NotImplementedError()
 
+    def set_params(self, **parameters):
+        self.__init__(**parameters)
+        return(self)
 
 class LogisticRegressionClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
@@ -263,18 +270,50 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
             'feature_confidence_estimator':self.feature_confidence_estimator,
             'n_jobs':self.n_jobs})
 
-    def set_params(self, **parameters):
-        self.__init__(**parameters)
-        return(self)
+    def get_learner(self, X, y):
+        local_X = self._transform(X)
+        self.learner.fit(local_X, y)
+        return(self.learner)
+
+    def getClassifierFeatures(self):
+        scores = self.learner.coef_.flatten()
+        local_cols = np.arange(scores.shape[0])[(scores != 0),]
+        return(np.delete(np.arange(self._X_colcount),
+                         self.excluded_features)[local_cols])
+
+    def getClassifierFeatureWeights(self):
+        scores = self.learner.coef_.flatten()
+        scores = scores[(scores != 0),]
+        features = self.getClassifierFeatures()
+        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
+
+class LinearSVCClassifier(BaseWeakClassifier):
+    def __init__(self, n_jobs = 1,
+                 excluded_features=None,
+                 feature_confidence_estimator=PredictBasedFCE(),
+                 C = 0.2):
+        learner = sklearn.svm.LinearSVC(C = C,
+                                        penalty = 'l1',
+                                        dual = False)
+        super(LinearSVCClassifier, self).__init__(
+            learner, n_jobs, excluded_features, feature_confidence_estimator)
+
+    def get_params(self, deep=True):
+        return( {
+            'C':self.learner.get_params()['C'],
+            'excluded_features':self.excluded_features,
+            'feature_confidence_estimator':self.feature_confidence_estimator,
+            'n_jobs':self.n_jobs})
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        cs = sklearn.svm.l1_min_c(
-            local_X, y, loss='l2') *np.logspace(0,2)
-        counts = []
+        '''
         self.learner = sklearn.svm.LinearSVC(C = 1.0,
                                              penalty = 'l1',
                                              dual = False)
+        cs = sklearn.svm.l1_min_c(
+            local_X, y, loss='l2') *np.logspace(0,2)
+        counts = []
         for c in cs:
             self.learner.set_params(C=c)
             self.learner.fit(local_X, y)
@@ -289,24 +328,61 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
                 last_diff = diff
 
             if (counts[i] > 1):
-                if (i - last_diff > 3 or counts[i] > 10):
+                if (i - last_diff > 3 or counts[i] > 20):
                     break
         self.learner.set_params(C=cs[last_change])
+        '''
         self.learner.fit(local_X, y)
         return(self.learner)
 
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
-        local_cols = np.arange(scores.shape[0])[(scores != 0),]
-        #print('lc', local_cols)
-        #print('ef', self.excluded_features)
-        #print('xc', self._X_colcount)
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.95
+        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
 
     def getClassifierFeatureWeights(self):
         scores = self.learner.coef_.flatten()
-        scores = scores[(scores != 0),]
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.95
+        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
+        scores = scores[local_cols,]
+        features = self.getClassifierFeatures()
+        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
+
+class NuSVCClassifier(BaseWeakClassifier):
+    def __init__(self, n_jobs = 1,
+                 excluded_features=None,
+                 feature_confidence_estimator=PredictBasedFCE()):
+        learner = sklearn.svm.NuSVC(nu = 0.25,
+                                    kernel = 'linear',
+                                    probability = True)
+        super(NuSVCClassifier, self).__init__(
+            learner, n_jobs, excluded_features, feature_confidence_estimator)
+
+    def get_params(self, deep=True):
+        return( {
+            'excluded_features':self.excluded_features,
+            'feature_confidence_estimator':self.feature_confidence_estimator,
+            'n_jobs':self.n_jobs})
+
+    def get_learner(self, X, y):
+        local_X = self._transform(X)
+        self.learner.fit(local_X, y)
+        return(self.learner)
+
+    def getClassifierFeatures(self):
+        scores = self.learner.coef_.flatten()
+        local_cols = np.arange(scores.shape[0])[
+            abs(scores) > 0.90 * np.max(abs(scores))]        
+        return(np.delete(np.arange(self._X_colcount),
+                         self.excluded_features)[local_cols])
+
+    def getClassifierFeatureWeights(self):
+        scores = self.learner.coef_.flatten()
+        local_cols = np.arange(scores.shape[0])[
+            abs(scores) > 0.90 * np.max(abs(scores))]        
+        scores = scores[local_cols,]
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
 
@@ -316,8 +392,10 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         
     def __init__(self, 
                  learner_count=10,
-                 learner=None,
-                 overlapping_features=False):
+                 learner_type='linear svc',
+                 overlapping_features=False,
+                 C = None,
+                 n_jobs = 1):
         
         try:
             learner_count = int(learner_count)
@@ -328,19 +406,33 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             raise TypeError("overlapping_features should be a Boolean.")
 
         self.learner_count = learner_count
-        if (learner == None):
-            self.learner = LogisticRegressionClassifier(n_jobs = 1)
+        self.learner_type = learner_type
+        if (learner_type == 'logistic regression'):
+            if (C == None):
+                C = 0.3
+            self.learner = LogisticRegressionClassifier(C = C, n_jobs = n_jobs)
+        elif (learner_type == 'linear svc'):
+            if (C == None):
+                C = 0.1
+            self.learner = LinearSVCClassifier(C = C, n_jobs = n_jobs)
+        elif (learner_type == 'nu svc'):
+            self.learner = NuSVCClassifier(n_jobs=n_jobs)
         else:
-            self.learner = learner
+            raise RuntimeError("learner_type must be in ('logistic regression',\
+                               'linear svc', 'nu svc')")
+
+            
         self.overlapping_features = overlapping_features
         self.learners = []
         self.excluded_features = np.empty(0, dtype=int)
+        self.n_jobs = n_jobs
 
     def get_params(self, deep=True):
         return( {
             'learner_count':self.learner_count,
-            'learner':self.learner,
-            'overlapping_features':self.overlapping_features})
+            'learner_type':self.learner_type,
+            'overlapping_features':self.overlapping_features,
+            'n_jobs':self.n_jobs})
 
     def set_params(self, **parameters):
         self.__init__(**parameters)
@@ -387,6 +479,10 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         return self.classes_[np.argmax(D, axis=1)]
     '''
     def decision_function(self, X, return_details=False):
+        X = X.view(np.ndarray)
+
+        if (X.ndim == 1):
+            X = X.reshape(1,-1)
 
         predictions = np.empty((X.shape[0],0), dtype=float)
         confidences = np.empty((X.shape[0],0), dtype=float)

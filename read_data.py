@@ -20,6 +20,7 @@ from misc import *
 import read_nordlund1 
 import read_nordlund2
 import read_vantveer
+import read_tcga_brca
 from rat import *
 
 if __name__ == '__main__':
@@ -28,11 +29,15 @@ if __name__ == '__main__':
     ''' load nordlund T-ALL vs BCP-ALL '''
     #(tmpX, y, g, sample_annotation, feature_annotation) = read_nordlund1.load_data()
     ''' load  nordlund subtypes A vs subtypes B '''
-    (tmpX, y, g,
-     sample_annotation,
-     feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
+    #(tmpX, y, g,
+    # sample_annotation,
+    # feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
     ''' load vantveer data poor vs good prognosis '''
     #(tmpX, y, g, sample_annotation, feature_annotation) = read_vantveer.load_data()
+    ''' load TCGA BRCA data '''
+    (tmpX, y, g,
+     sample_annotation,
+     feature_annotation) = read_tcga_brca.load_data('T')
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
@@ -66,7 +71,7 @@ if __name__ == '__main__':
             print("test  auc %s: " % (key), statstr(value))
 
     all_scores = defaultdict(list)
-    cvs = cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2)
+    cvs = cv.StratifiedShuffleSplit(y, n_iter = 30, test_size = 0.2)
     
     machine = svm.NuSVC(nu=0.25,
                         kernel='linear',
@@ -134,7 +139,15 @@ if __name__ == '__main__':
     all_scores['1,0.3,5'] = scores
     log(all_scores)
     
+    scores = _f(3, 0.3, 10)
+    all_scores['5,0.3,10'] = scores
+    log(all_scores)
+    
     scores = _f(5, 0.3, 10)
+    all_scores['5,0.3,10'] = scores
+    log(all_scores)
+    
+    scores = _f(7, 0.3, 10)
     all_scores['5,0.3,10'] = scores
     log(all_scores)
     
@@ -180,6 +193,14 @@ if __name__ == '__main__':
     '''
     print('bye')
 
+boz = sklearn.svm.NuSVC(nu = 0.25, kernel='linear', probability=True)
+boz.fit(tmpX, y)
+boz.decision_function(tmpX[0,])
+boz.coef_[boz.coef_ != 0]
+boz.coef_[abs(boz.coef_) > 0.90 * np.max(abs(boz.coef_))]
+
+cs = sklearn.svm.l1_min_c(tmpX, y, loss='l2') * np.logspace(0,2)
+
 '''
 exec(open("./rat.py").read())
 a = LogisticRegressionClassifier(n_jobs = 30,
@@ -194,13 +215,12 @@ a.fit(tmpX, y)
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 10,
-        learner = LogisticRegressionClassifier(
-            C = 0.0,
-            feature_confidence_estimator=PredictBasedFCE(
-                feature_count = 5),
-            n_jobs = 30))
-a.fit(tmpX, y)
+a = Rat(learner_count = 3,
+        learner_type = 'linear svc',
+        n_jobs = 30)
+a.fit(tmpX[:200,], y[:200])
+a.predict(tmpX[1,])
+a.predict(tmpX[:3,])
 a.score(tmpX, y)
 scores = cv.cross_val_score(
     a, tmpX, y,
@@ -231,22 +251,4 @@ pl.title('Logistic Regression Path')
 pl.axis('tight')
 pl.show()
 
-
-counts = [sum([1 for i in range(coefs_.shape[1])
-               if coefs_[j,i] != 0])
-          for j in range(coefs_.shape[0])]
-
-last_diff = counts[1] - counts[0]
-last_change = 1
-for i in range(2, len(counts)):
-    diff = counts[i] - counts[i-1]
-    if diff > 0:
-        last_change = i
-        last_diff = diff
-
-    print(diff, last_change)
-    if (i - last_diff > 3 or counts[i] > 10):
-        break
-
-print(last_diff, last_change)
 '''

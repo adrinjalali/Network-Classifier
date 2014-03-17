@@ -37,7 +37,7 @@ if __name__ == '__main__':
     ''' load TCGA BRCA data '''
     (tmpX, y, g,
      sample_annotation,
-     feature_annotation) = read_tcga_brca.load_data('T')
+     feature_annotation) = read_tcga_brca.load_data('N')
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
@@ -48,20 +48,25 @@ if __name__ == '__main__':
 
     print("cross-validation...")
 
-    def _f(l, c, s):
+    def _f(l, c, learner_type):
+        print("%d %g %s" %(l,c, learner_type))
         rat = Rat(learner_count = l,
-                  learner = LogisticRegressionClassifier(
-                      C = c,
-                      feature_confidence_estimator=PredictBasedFCE(
-                          feature_count = s),
-                      n_jobs = 1))
+                  learner_type = learner_type,
+                  C = c,
+                  n_jobs = 1)
         scores = cv.cross_val_score(
             rat, tmpX, y,
             cv=cvs,
             scoring = 'roc_auc',
             n_jobs=30,
             verbose=1)
+        all_scores["%d, %g, %s" % (l, c, learner_type)] = scores
         return(scores)
+
+    def _f_alltypes(l, c):
+        _f(l, c, "logistic regression")
+        _f(l, c, "linear svc")
+        _f(l, c, "nu svc")
         
     def log(all_scores):
         print('=========')
@@ -70,8 +75,12 @@ if __name__ == '__main__':
         for key, value in all_scores.items():
             print("test  auc %s: " % (key), statstr(value))
 
+    def dump_scores(file_name, scores):
+        import pickle
+        pickle.dump(scores, open(file_name, "wb"))
+
     all_scores = defaultdict(list)
-    cvs = cv.StratifiedShuffleSplit(y, n_iter = 30, test_size = 0.2)
+    cvs = cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2)
     
     machine = svm.NuSVC(nu=0.25,
                         kernel='linear',
@@ -135,33 +144,27 @@ if __name__ == '__main__':
     
     log(all_scores)
     
-    scores = _f(1, 0.3, 5)
-    all_scores['1,0.3,5'] = scores
+    _f_alltypes(1, 0.3)
     log(all_scores)
     
-    scores = _f(3, 0.3, 10)
-    all_scores['5,0.3,10'] = scores
+    _f_alltypes(3, 0.3)
     log(all_scores)
     
-    scores = _f(5, 0.3, 10)
-    all_scores['5,0.3,10'] = scores
+    _f_alltypes(5, 0.3)
     log(all_scores)
     
-    scores = _f(7, 0.3, 10)
-    all_scores['5,0.3,10'] = scores
+    _f_alltypes(7, 0.3)
     log(all_scores)
     
-    scores = _f(10, 0.3, 5)
-    all_scores['10,0.3,5'] = scores
+    _f_alltypes(10, 0.3)
     log(all_scores)
     
-    scores = _f(15, 0.3, 5)
-    all_scores['15,0.3,5'] = scores
+    _f_alltypes(15, 0.3)
     log(all_scores)
     
-    scores = _f(20, 0.3, 5)
-    all_scores['20,0.3,5'] = scores
+    _f_alltypes(20, 0.3)
     log(all_scores)
+    
 
     '''
     rat = Rat(learner_count = 10,
@@ -215,8 +218,9 @@ a.fit(tmpX, y)
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 3,
+a = Rat(learner_count = 2,
         learner_type = 'linear svc',
+        C = 0.2,
         n_jobs = 30)
 a.fit(tmpX[:200,], y[:200])
 a.predict(tmpX[1,])
@@ -252,3 +256,5 @@ pl.axis('tight')
 pl.show()
 
 '''
+
+

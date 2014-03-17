@@ -337,14 +337,14 @@ class LinearSVCClassifier(BaseWeakClassifier):
 
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.95
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
 
     def getClassifierFeatureWeights(self):
         scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.95
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
         scores = scores[local_cols,]
         features = self.getClassifierFeatures()
@@ -438,7 +438,49 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         self.__init__(**parameters)
         return(self)
 
+    def chooseLearnerType(self, X, y):
+        cvs = cv.StratifiedShuffleSplit(y, n_iter = 30, test_size = 0.2)
+
+        learner = LogisticRegressionClassifier(C = 0.3, n_jobs = 1)
+        scores = cv.cross_val_score(
+            learner, X, y,
+            cv = cvs,
+            scoring = 'roc_auc',
+            n_jobs = self.n_jobs,
+            verbose=0)
+        s1 = np.mean(scores)
+        
+        learner = LinearSVCClassifier(C = 0.2, n_jobs = 1)
+        scores = cv.cross_val_score(
+            learner, X, y,
+            cv = cvs,
+            scoring = 'roc_auc',
+            n_jobs = self.n_jobs,
+            verbose=0)
+        s2 = np.mean(scores)
+        
+        learner = NuSVCClassifier(n_jobs = 1)
+        scores = cv.cross_val_score(
+            learner, X, y,
+            cv = cvs,
+            scoring = 'roc_auc',
+            n_jobs = self.n_jobs,
+            verbose=0)
+        s3 = np.mean(scores)
+
+        if (s1 == max(s1, s2, s3)):
+            learner_type = 'logistic regression'
+        elif (s2 == max(s1, s2, s3)):
+            learner_type = 'linear svc'
+        elif (s3 == max(s1, s2, s3)):
+            learner_type = 'nu svc'
+
+        print(learner_type)
+        return(learner_type)
+        
     def getSingleLearner(self, X, y):
+        #self.learner_type = self.chooseLearnerType(X, y)
+        
         for i in range(5):
             rs = cv.ShuffleSplit(n=X.shape[0], n_iter=1,
                                  train_size=0.9)
@@ -460,7 +502,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         self.X = X.view(np.ndarray)
         self.y = y.view(np.ndarray).squeeze()
 
-        self.classes_, y = sklearn.utils.fixes.unique(y, return_inverse=True)
+        self.classes_, y = np.unique(y, return_inverse=True)
 
         self.learners = []
         self.excluded_features = np.empty(0, dtype=int)
@@ -502,57 +544,3 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         else:
             return(result)
         
-'''            
-predictions = np.empty((97,0), dtype=float)
-confidences = np.empty((97,0), dtype=float)
-for l in rat.learners:
-    predictions = np.hstack((predictions, l.decision_function(tmpX).reshape(-1,1)))
-    confidences = np.hstack((confidences, l.getConfidence(tmpX).reshape(-1,1)))
-
-if (len(self.learners) > 1):
-    #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-    result = np.average(predictions, weights=confidences)
-else:
-    result = predictions
-if (return_details):
-    return((result, predictions, confidences))
-else:
-    return(result)
-
-
-l = rat.learners[0]
-result = 1.0
-feature_weights = l.getClassifierFeatureWeights()
-weight_sum = 0.0
-for key, fc in l._FCEs.items():
-    result += fc.getConfidence(tmpX) * abs(feature_weights[key])
-    weight_sum += abs(feature_weights[key])
-res = ((result / weight_sum) * np.max(l.predict_proba(tmpX), axis=1))
-'''
-
-    
-def rat_parameter_search(X, y, weak_learner_count = [5, 10, 15],
-                         second_leayer_feature_count = [5, 10],
-                         regularization_parameter = [0.2, 0.3, 0.4]):
-
-    train_auc = list()
-    test_auc = list()
-    for wlc in weak_learner_count:
-        for slfc in second_layer_feature_count:
-            for rp in regularization_parameter:
-                weak_learner = LogisticRegressionClassifier(
-                    C = rp,
-                    second_layer_feature_count = slfc)
-                rat_model = Rat(learner_count = wlc,
-                                learner = weak_learner,
-                                n_jobs = 30)
-                scores = cv.cross_val_score(
-                    rat_model, tmpX, y,
-                    cv=5, scoring = 'roc_auc', n_jobs=5)
-                rat_model.fit(train_data, train_labels)
-                out = rat_model.predict(train_data)
-                out_test = rat_model.predict(test_data)
-                train_auc.append((wlc, slfc, rp,
-                                  roc_auc_score(train_labels, out)))
-                test_auc.append((wlc, slfc, rp,
-                                 roc_auc_score(test_labels, out_test)))

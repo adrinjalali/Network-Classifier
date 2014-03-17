@@ -249,7 +249,7 @@ def load_data(target_output):
         X = X[final_sample_indices,]
         patient_data = patient_data[final_sample_indices,:]
     elif (target_output == 'T'):
-        # Stage status is column 37
+        # T (tumor size) status is column 37
         labels = patient_data[:,37]
         y = np.zeros(len(patient_data), dtype=int)
         y[labels == 'T1'] = -1
@@ -274,8 +274,27 @@ def load_data(target_output):
         y = y[final_sample_indices]
         X = X[final_sample_indices,]
         patient_data = patient_data[final_sample_indices,:]
+    elif (target_output == 'N'):
+        # N (lymph nodes) status is column 38
+        labels = patient_data[:,38]
+        y = np.zeros(len(patient_data), dtype=int)
+        N0s = np.array([labels[i].startswith("N0") for i in range(len(labels))])
+        y[N0s] = -1
+
+        N1s = np.array([labels[i].startswith("N1") for i in range(len(labels))])
+        y[N1s] = 1
+        N2s = np.array([labels[i].startswith("N2") for i in range(len(labels))])
+        y[N1s] = 1
+        N3s = np.array([labels[i].startswith("N3") for i in range(len(labels))])
+        y[N1s] = 1
+        
+        final_sample_indices = (y != 0)
+
+        y = y[final_sample_indices]
+        X = X[final_sample_indices,]
+        patient_data = patient_data[final_sample_indices,:]
     else:
-        raise RuntimeError("target_output not in ('ER', 'T', 'stage')")
+        raise RuntimeError("target_output not in ('ER', 'T', 'N', 'stage')")
 
     return (X, y, g, patient_data, genes)
     

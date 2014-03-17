@@ -21,6 +21,7 @@ import read_nordlund1
 import read_nordlund2
 import read_vantveer
 import read_tcga_brca
+import read_tcga_laml
 from rat import *
 
 if __name__ == '__main__':
@@ -35,9 +36,13 @@ if __name__ == '__main__':
     ''' load vantveer data poor vs good prognosis '''
     #(tmpX, y, g, sample_annotation, feature_annotation) = read_vantveer.load_data()
     ''' load TCGA BRCA data '''
+    #(tmpX, y, g,
+    # sample_annotation,
+    # feature_annotation) = read_tcga_brca.load_data('N')
+    ''' load TCGA LAML data '''
     (tmpX, y, g,
      sample_annotation,
-     feature_annotation) = read_tcga_brca.load_data('N')
+     feature_annotation) = read_tcga_laml.load_data('vital_status')
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
@@ -47,6 +52,8 @@ if __name__ == '__main__':
     X_prime = tmpX.dot(L)
 
     print("cross-validation...")
+
+    cpu_count = 5
 
     def _f(l, c, learner_type):
         print("%d %g %s" %(l,c, learner_type))
@@ -58,7 +65,7 @@ if __name__ == '__main__':
             rat, tmpX, y,
             cv=cvs,
             scoring = 'roc_auc',
-            n_jobs=30,
+            n_jobs=cpu_count,
             verbose=1)
         all_scores["%d, %g, %s" % (l, c, learner_type)] = scores
         return(scores)
@@ -90,7 +97,7 @@ if __name__ == '__main__':
         machine, tmpX, y,
         cv = cvs,
         scoring = 'roc_auc',
-        n_jobs = 30,
+        n_jobs = cpu_count,
         verbose=1)
     all_scores['original, nuSVM(0.25), linear'].append(scores)
 
@@ -102,7 +109,7 @@ if __name__ == '__main__':
         machine, tmpX, y,
         cv = cvs,
         scoring = 'roc_auc',
-        n_jobs = 30,
+        n_jobs = cpu_count,
         verbose=1)
     all_scores['original, nuSVM(0.25), rbf'].append(scores)
 
@@ -114,7 +121,7 @@ if __name__ == '__main__':
         machine, X_prime, y,
         cv = cvs,
         scoring = 'roc_auc',
-        n_jobs = 30,
+        n_jobs = cpu_count,
         verbose=1)
     all_scores['transformed, nuSVM(0.25), linear'].append(scores)
 
@@ -125,7 +132,7 @@ if __name__ == '__main__':
         machine, tmpX, y,
         cv = cvs,
         scoring = 'roc_auc',
-        n_jobs = 30,
+        n_jobs = cpu_count,
         verbose=1)
     all_scores['gradientboostingclassifier'].append(scores)
 
@@ -137,7 +144,7 @@ if __name__ == '__main__':
         machine, tmpX, y,
         cv = cvs,
         scoring = 'roc_auc',
-        n_jobs = 30,
+        n_jobs = cpu_count,
         verbose=1)
     all_scores['adaboost'].append(scores)
     

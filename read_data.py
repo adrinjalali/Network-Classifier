@@ -12,7 +12,8 @@ from sklearn.grid_search import GridSearchCV
 import sklearn.ensemble
 import sklearn.tree
 from collections import defaultdict
-
+import time
+from joblib import Parallel, delayed, logger
 
 
 from constants import *;
@@ -25,6 +26,142 @@ import read_tcga_laml
 from rat import *
 
 if __name__ == '__main__':
+    def reload_rat():
+        with open("./rat.py") as f:
+            code = compile(f.read(), "rat.py", 'exec')
+            exec(code)
+
+    def print_log(all_scores, rat_scores):
+        print('=========')
+        def statstr(v):
+            return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
+        for key, value in all_scores.items():
+            print("test auc %s: " % (key), statstr(value))
+        for key, value in rat_scores.items():
+            print("test auc %s:" % (key))
+            for key2 in sorted(value.keys()):
+                print("\t%s: " % (key2), statstr(value[key2]))
+
+    def dump_scores(file_name, scores):
+        import pickle
+        pickle.dump(scores, open(file_name, "wb"))
+
+    def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
+                       fit_params, max_learner_count, return_train_score=False,
+                       return_parameters=False):
+        if verbose > 1:
+            if parameters is None:
+                msg = "no parameters to be set"
+            else:
+                msg = '%s' % (', '.join('%s=%s' % (k, v)
+                                        for k, v in parameters.items()))
+            print("[CV] %s %s" % (msg, (64 - len(msg)) * '.'))
+        
+        # Adjust lenght of sample weights
+        n_samples = len(X)
+        fit_params = fit_params if fit_params is not None else {}
+        fit_params = dict([(k, np.asarray(v)[train]
+                            if hasattr(v, '__len__') and len(v) == n_samples else v)
+                           for k, v in fit_params.items()])
+        
+        if parameters is not None:
+            estimator.set_params(**parameters)
+            
+        X_train, y_train = sklearn.cross_validation._safe_split(
+            estimator, X, y, train)
+        X_test, y_test = sklearn.cross_validation._safe_split(
+            estimator, X, y, test, train)
+        result = list()
+        from_scratch = True
+        for i in range(max_learner_count):
+            start_time = time.time()
+        
+            estimator.fit(X_train, y_train, from_scratch = from_scratch)
+            test_score = sklearn.cross_validation._score(
+                estimator, X_test, y_test, scorer)
+            if return_train_score:
+                train_score = _score(estimator, X_train, y_train, scorer)
+            ret = [train_score] if return_train_score else []
+
+            scoring_time = time.time() - start_time
+
+            ret.extend([test_score, len(X_test), scoring_time])
+            if return_parameters:
+                ret.append(parameters)
+            result.append(ret)
+            from_scratch = False
+            
+            
+            if verbose > 2:
+                msg += ", score=%f" % test_score
+            if verbose > 1:
+                end_msg = "%s -%s" % (msg, logger.short_format_time(scoring_time))
+                print("[CV] %s %s" % ((64 - len(end_msg)) * '.', end_msg))
+            
+        return result
+        
+    def rat_cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
+                        verbose=0, fit_params=None, score_func=None,
+                        pre_dispatch='2*n_jobs', max_learner_count = 2):
+        X, y = sklearn.utils.check_arrays(X, y, sparse_format='csr', allow_lists=True)
+        cv = sklearn.cross_validation._check_cv(cv,
+                                                X, y,
+                                                classifier=sklearn.base.is_classifier(estimator))
+        scorer = sklearn.cross_validation.check_scoring(
+            estimator, score_func=score_func, scoring=scoring)
+        # We clone the estimator to make sure that all the folds are
+        # independent, and that it is pickle-able.
+
+        jobs = list(dict())
+
+        fit_params = fit_params if fit_params is not None else {}
+        parallel = Parallel(n_jobs=n_jobs, verbose=verbose,
+                            pre_dispatch=pre_dispatch)
+
+        fit_params['from_scratch'] = True
+        collected_scores = dict()
+        scorer = sklearn.metrics.scorer.get_scorer(scoring)
+        scorer = sklearn.metrics.scorer.get_scorer(scoring)
+        scores = parallel(
+            delayed(_fit_and_score)(
+                estimator,
+                X, y, scorer,
+                train, test,
+                verbose, None, fit_params,
+                max_learner_count = max_learner_count)
+            for train, test in cv)
+            
+        return (scores)
+
+    def _f(learner_type):
+        print("%s" %(learner_type))
+        rat = Rat(learner_count = 1,
+                  learner_type = learner_type,
+                  n_jobs = 1)
+        scores = rat_cross_val_score(
+            rat, tmpX, y,
+            cv=cvs,
+            scoring = 'roc_auc',
+            n_jobs=cpu_count,
+            verbose=1,
+            max_learner_count = max_learner_count)
+
+        scores = np.array(scores)
+        commulative_score = dict()
+        for i in range(max_learner_count):
+            commulative_score[i + 1] = scores[:,i,0]
+
+        rat_scores[learner_type] = commulative_score
+        return(scores)
+
+    def _f_alltypes():
+        _f("logistic regression")
+        print_log(all_scores, rat_scores)
+        _f("linear svc")
+        print_log(all_scores, rat_scores)
+        _f("nu svc")
+        print_log(all_scores, rat_scores)
+        
     print('hi');
 
     ''' load nordlund T-ALL vs BCP-ALL '''
@@ -36,13 +173,13 @@ if __name__ == '__main__':
     ''' load vantveer data poor vs good prognosis '''
     #(tmpX, y, g, sample_annotation, feature_annotation) = read_vantveer.load_data()
     ''' load TCGA BRCA data '''
-    #(tmpX, y, g,
-    # sample_annotation,
-    # feature_annotation) = read_tcga_brca.load_data('N')
-    ''' load TCGA LAML data '''
     (tmpX, y, g,
      sample_annotation,
-     feature_annotation) = read_tcga_laml.load_data('vital_status')
+     feature_annotation) = read_tcga_brca.load_data('ER')
+    ''' load TCGA LAML data '''
+    #(tmpX, y, g,
+    # sample_annotation,
+    # feature_annotation) = read_tcga_laml.load_data('vital_status')
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)
@@ -53,41 +190,12 @@ if __name__ == '__main__':
 
     print("cross-validation...")
 
-    cpu_count = 5
-
-    def _f(l, c, learner_type):
-        print("%d %g %s" %(l,c, learner_type))
-        rat = Rat(learner_count = l,
-                  learner_type = learner_type,
-                  C = c,
-                  n_jobs = 1)
-        scores = cv.cross_val_score(
-            rat, tmpX, y,
-            cv=cvs,
-            scoring = 'roc_auc',
-            n_jobs=cpu_count,
-            verbose=1)
-        all_scores["%d, %g, %s" % (l, c, learner_type)] = scores
-        return(scores)
-
-    def _f_alltypes(l, c):
-        _f(l, c, "logistic regression")
-        _f(l, c, "linear svc")
-        _f(l, c, "nu svc")
-        
-    def log(all_scores):
-        print('=========')
-        def statstr(v):
-            return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
-        for key, value in all_scores.items():
-            print("test  auc %s: " % (key), statstr(value))
-
-    def dump_scores(file_name, scores):
-        import pickle
-        pickle.dump(scores, open(file_name, "wb"))
-
+    cpu_count = 30
+    max_learner_count = 40
+    fold_count = 30
+    rat_scores = dict()
     all_scores = defaultdict(list)
-    cvs = cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2)
+    cvs = cv.StratifiedShuffleSplit(y, n_iter = fold_count, test_size = 0.2)
     
     machine = svm.NuSVC(nu=0.25,
                         kernel='linear',
@@ -148,68 +256,11 @@ if __name__ == '__main__':
         verbose=1)
     all_scores['adaboost'].append(scores)
     
-    
-    log(all_scores)
-    
-    _f_alltypes(1, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(3, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(5, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(7, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(10, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(15, 0.3)
-    log(all_scores)
-    
-    _f_alltypes(20, 0.3)
-    log(all_scores)
-    
+    print_log(all_scores, rat_scores)    
 
-    '''
-    rat = Rat(learner_count = 10,
-    learner = LogisticRegressionClassifier(
-    C = 0.3,
-                      feature_confidence_estimator=PredictBasedFCE(
-                          feature_count = 5),
-                      n_jobs = 1))
-        learners = list()
-        for c in [0.3, 0.4]:
-            for s in [5, 10]:
-                learners.append(LogisticRegressionClassifier(
-                    C = c,
-                    feature_confidence_estimator=PredictBasedFCE(feature_count=s),
-                    n_jobs = 1))
-
-        param_grid = {'learner_count': [5,10], 'learner': learners,
-                      'overlapping_features':[False]}
-        model = GridSearchCV(rat, param_grid = param_grid, scoring = 'roc_auc',
-                             n_jobs = 30, refit = True, cv=5, verbose=1)
-        scores = cv.cross_val_score(
-            model, tmpX, y,
-            cv=cvs,
-            scoring = 'roc_auc',
-            n_jobs=1,
-            verbose=1)
-        all_scores['gridsearchcv'].append(scores)
-        log(all_scores)
-    '''
+    _f_alltypes()
     print('bye')
 
-boz = sklearn.svm.NuSVC(nu = 0.25, kernel='linear', probability=True)
-boz.fit(tmpX, y)
-boz.decision_function(tmpX[0,])
-boz.coef_[boz.coef_ != 0]
-boz.coef_[abs(boz.coef_) > 0.90 * np.max(abs(boz.coef_))]
-
-cs = sklearn.svm.l1_min_c(tmpX, y, loss='l2') * np.logspace(0,2)
 
 '''
 exec(open("./rat.py").read())
@@ -225,18 +276,19 @@ a.fit(tmpX, y)
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 2,
-        learner_type = 'linear svc',
-        C = 0.2,
+a = Rat(learner_count = 10,
+        learner_type = 'logistic regression',
+        C = 0.3,
         n_jobs = 30)
-a.fit(tmpX[:200,], y[:200])
+a.fit(tmpX[:60,], y[:60])
 a.predict(tmpX[1,])
 a.predict(tmpX[:3,])
 a.score(tmpX, y)
 scores = cv.cross_val_score(
     a, tmpX, y,
     cv=5,
-    scoring = 'roc_auc',
+
+scoring = 'roc_auc',
     n_jobs = 1,
     verbose=1)
 print(np.average(scores))

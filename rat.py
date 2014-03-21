@@ -76,6 +76,7 @@ class PredictBasedFCE(BaseEstimator):
         try:
             feature = int(feature)
         except Exception:
+            print("feature should be int")
             raise TypeError("feature should be int")
 
         if (isinstance(excluded_features, set) or
@@ -83,6 +84,7 @@ class PredictBasedFCE(BaseEstimator):
             excluded_features = np.array(list(excluded_features), dtype=int)
             
         if not utilities.check_1d_array(excluded_features):
+            print("excluded features should be 1d ndarray")
             raise TypeError("excluded features should be 1d ndarray")
 
         X = X.view(np.ndarray)
@@ -239,12 +241,15 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         
     def getAllFeatures(self):
         features = self.getClassifierFeatures()
-        return(np.union1d(features, self._second_layer_features))
+        return(features)
+        #return(np.union1d(features, self._second_layer_features))
 
     def getClassifierFeatures(self):
+        print("getClassifierFeatures(self): not implemented")
         raise NotImplementedError()
 
     def getClassifierFeatureWeights(self):
+        print("getClassifierFeatureWeights(self): not implemented")
         raise NotImplementedError()
 
     def set_params(self, **parameters):
@@ -272,9 +277,17 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        self.learner.fit(local_X, y)
+        index = 20
+        cs = sklearn.svm.l1_min_c(local_X, y, loss='log') * np.logspace(0,2)
+        while (index < len(cs)):
+            self.learner.set_params(C = cs[index])
+            self.learner.fit(local_X, y)
+            if (len(self.getClassifierFeatures()) > 0):
+                return(self.learner)
+            index += 10
+            print("index: %d" % (index))
         return(self.learner)
-
+    
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
         local_cols = np.arange(scores.shape[0])[(scores != 0),]
@@ -286,6 +299,22 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
         scores = scores[(scores != 0),]
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
+    '''
+    def getClassifierFeatures(self):
+        scores = self.learner.coef_.flatten()
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
+        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
+        return(np.delete(np.arange(self._X_colcount),
+                         self.excluded_features)[local_cols])
+
+    def getClassifierFeatureWeights(self):
+        scores = self.learner.coef_.flatten()
+        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
+        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
+        scores = scores[local_cols,]
+        features = self.getClassifierFeatures()
+        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
+    '''
 
 class LinearSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
@@ -307,32 +336,14 @@ class LinearSVCClassifier(BaseWeakClassifier):
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        '''
-        self.learner = sklearn.svm.LinearSVC(C = 1.0,
-                                             penalty = 'l1',
-                                             dual = False)
-        cs = sklearn.svm.l1_min_c(
-            local_X, y, loss='l2') *np.logspace(0,2)
-        counts = []
-        for c in cs:
-            self.learner.set_params(C=c)
+        index = 15
+        cs = sklearn.svm.l1_min_c(local_X, y, loss='l2') * np.logspace(0,2)
+        while (index < len(cs)):
+            self.learner.set_params(C = cs[index])
             self.learner.fit(local_X, y)
-            counts.append(self.getClassifierFeatures().shape[0])
-
-        last_diff = counts[1] - counts[0]
-        last_change = 1
-        for i in range(2, len(counts)):
-            diff = counts[i] - counts[i-1]
-            if diff > 0:
-                last_change = i
-                last_diff = diff
-
-            if (counts[i] > 1):
-                if (i - last_diff > 3 or counts[i] > 20):
-                    break
-        self.learner.set_params(C=cs[last_change])
-        '''
-        self.learner.fit(local_X, y)
+            if (len(self.getClassifierFeatures()) > 0):
+                return(self.learner)
+            index += 5
         return(self.learner)
 
     def getClassifierFeatures(self):
@@ -374,14 +385,14 @@ class NuSVCClassifier(BaseWeakClassifier):
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
         local_cols = np.arange(scores.shape[0])[
-            abs(scores) > 0.90 * np.max(abs(scores))]        
+            abs(scores) > 0.80 * np.max(abs(scores))]        
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
 
     def getClassifierFeatureWeights(self):
         scores = self.learner.coef_.flatten()
         local_cols = np.arange(scores.shape[0])[
-            abs(scores) > 0.90 * np.max(abs(scores))]        
+            abs(scores) > 0.80 * np.max(abs(scores))]        
         scores = scores[local_cols,]
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
@@ -397,34 +408,10 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                  C = None,
                  n_jobs = 1):
         
-        try:
-            learner_count = int(learner_count)
-        except:
-            raise TypeError("learner_count should be an int")
-
-        if (not isinstance(overlapping_features, bool)):
-            raise TypeError("overlapping_features should be a Boolean.")
-
         self.learner_count = learner_count
         self.learner_type = learner_type
-        if (learner_type == 'logistic regression'):
-            if (C == None):
-                C = 0.3
-            self.learner = LogisticRegressionClassifier(C = C, n_jobs = n_jobs)
-        elif (learner_type == 'linear svc'):
-            if (C == None):
-                C = 0.1
-            self.learner = LinearSVCClassifier(C = C, n_jobs = n_jobs)
-        elif (learner_type == 'nu svc'):
-            self.learner = NuSVCClassifier(n_jobs=n_jobs)
-        else:
-            raise RuntimeError("learner_type must be in ('logistic regression',\
-                               'linear svc', 'nu svc')")
-
-            
         self.overlapping_features = overlapping_features
-        self.learners = []
-        self.excluded_features = np.empty(0, dtype=int)
+        self.C = C
         self.n_jobs = n_jobs
 
     def get_params(self, deep=True):
@@ -432,12 +419,15 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             'learner_count':self.learner_count,
             'learner_type':self.learner_type,
             'overlapping_features':self.overlapping_features,
+            'C':self.C,
             'n_jobs':self.n_jobs})
 
+    '''
     def set_params(self, **parameters):
         self.__init__(**parameters)
         return(self)
-
+    '''
+    
     def chooseLearnerType(self, X, y):
         cvs = cv.StratifiedShuffleSplit(y, n_iter = 30, test_size = 0.2)
 
@@ -495,52 +485,105 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             l.fit(X, y)
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)
+        print("Tried 5 times to fit a learner, all chose no features.\
+              len(learners): %d" % (len(self.learners)))
         raise(RuntimeError("Tried 5 times to fit a learner, all chose no features."))
         
-    def fit(self, X, y):
-        #print(self)
-        self.X = X.view(np.ndarray)
-        self.y = y.view(np.ndarray).squeeze()
+    def fit(self, X, y, from_scratch = True):
+        X = X.view(np.ndarray)
+        y = y.view(np.ndarray).squeeze()
 
-        self.classes_, y = np.unique(y, return_inverse=True)
+        if (from_scratch == True):
+            try:
+                learner_count = int(self.learner_count)
+            except:
+                print("learner_count should be an int")
+                raise TypeError("learner_count should be an int")
 
-        self.learners = []
-        self.excluded_features = np.empty(0, dtype=int)
-        for i in range(self.learner_count):
-            tmp = self.getSingleLearner(X, y)
-            self.learners.append(tmp)
-            #print(tmp.getFeatures())
-            self.excluded_features = np.union1d(
-                self.excluded_features, tmp.getAllFeatures())
-            if (self.excluded_features.shape[0] > (X.shape[1] / 5)):
-                break
+            if (not isinstance(self.overlapping_features, bool)):
+                print("overlapping_features should be a Boolean.")
+                raise TypeError("overlapping_features should be a Boolean.")
+
+            if (self.learner_type == 'logistic regression'):
+                if (self.C == None):
+                    self.C = 0.3
+                self.learner = LogisticRegressionClassifier(C = self.C,
+                                                            n_jobs = self.n_jobs)
+            elif (self.learner_type == 'linear svc'):
+                if (self.C == None):
+                    self.C = 0.1
+                self.learner = LinearSVCClassifier(C = self.C,
+                                                   n_jobs = self.n_jobs)
+            elif (self.learner_type == 'nu svc'):
+                self.learner = NuSVCClassifier(n_jobs = self.n_jobs)
+            else:
+                print("learner_type must be in ('logistic regression',\
+                                   'linear svc', 'nu svc')")
+                raise RuntimeError("learner_type must be in ('logistic regression',\
+                                   'linear svc', 'nu svc')")
+
+            self.classes_, y = np.unique(y, return_inverse=True)
+
+            self.learners = []
+            self.excluded_features = np.empty(0, dtype=int)
+            for i in range(self.learner_count):
+                self.add_learner(X, y)
+                if (self.excluded_features.shape[0] > (X.shape[1] / 5)):
+                    break
+        else:
+            self.add_learner(X, y)
+            
         return(self)
+
+    def add_learner(self, X, y):
+        if (hasattr(self, 'single_learner_failed')):
+            print("I'm not stupid, won't try again, learner_count: \
+                  %d" % (self.learner_count))
+            return(self)
+            
+        X = X.view(np.ndarray)
+        y = y.view(np.ndarray).squeeze()
+        try:
+            tmp = self.getSingleLearner(X, y)
+        except:
+            print(sys.exc_info())
+            self.single_learner_failed = True
+            return(self)
+        self.learners.append(tmp)
+        self.excluded_features = np.union1d(
+            self.excluded_features, tmp.getAllFeatures())
+        self.learner_count = len(self.learners)
+        return(self)
+
     '''            
     def predict(self, X, return_details = False):
         D = self.decision_function(X)
         return self.classes_[np.argmax(D, axis=1)]
     '''
     def decision_function(self, X, return_details=False):
-        X = X.view(np.ndarray)
+        try:
+            X = X.view(np.ndarray)
 
-        if (X.ndim == 1):
-            X = X.reshape(1,-1)
+            if (X.ndim == 1):
+                X = X.reshape(1,-1)
 
-        predictions = np.empty((X.shape[0],0), dtype=float)
-        confidences = np.empty((X.shape[0],0), dtype=float)
-        for l in self.learners:
-            predictions = np.hstack((predictions,
-                                     l.decision_function(X).reshape(-1,1)))
-            confidences = np.hstack((confidences,
-                                     l.getConfidence(X).reshape(-1,1)))
+            predictions = np.empty((X.shape[0],0), dtype=float)
+            confidences = np.empty((X.shape[0],0), dtype=float)
+            for l in self.learners:
+                predictions = np.hstack((predictions,
+                                         l.decision_function(X).reshape(-1,1)))
+                confidences = np.hstack((confidences,
+                                         l.getConfidence(X).reshape(-1,1)))
 
-        if (len(self.learners) > 1):
-            #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-            result = np.average(predictions, weights=confidences, axis=1)
-        else:
-            result = predictions
-        if (return_details):
-            return((result, predictions, confidences))
-        else:
-            return(result)
+            if (len(self.learners) > 1):
+                #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
+                result = np.average(predictions, weights=confidences, axis=1)
+            else:
+                result = predictions
+            if (return_details):
+                return((result, predictions, confidences))
+            else:
+                return(result)
+        except:
+            print("@@@@@@@ :", sys.exc_info())
         

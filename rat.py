@@ -17,6 +17,7 @@ import heapq
 import numpy as np
 from joblib import Parallel, delayed
 import copy
+import sys
 
 class utilities:
     def exclude_cols(X, cols):
@@ -76,7 +77,7 @@ class PredictBasedFCE(BaseEstimator):
         try:
             feature = int(feature)
         except Exception:
-            print("feature should be int")
+            print("feature should be int", file=sys.stderr)
             raise TypeError("feature should be int")
 
         if (isinstance(excluded_features, set) or
@@ -84,7 +85,7 @@ class PredictBasedFCE(BaseEstimator):
             excluded_features = np.array(list(excluded_features), dtype=int)
             
         if not utilities.check_1d_array(excluded_features):
-            print("excluded features should be 1d ndarray")
+            print("excluded features should be 1d ndarray", file=sys.stderr)
             raise TypeError("excluded features should be 1d ndarray")
 
         X = X.view(np.ndarray)
@@ -277,7 +278,7 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        index = 20
+        index = 15
         cs = sklearn.svm.l1_min_c(local_X, y, loss='log') * np.logspace(0,2)
         while (index < len(cs)):
             self.learner.set_params(C = cs[index])
@@ -285,7 +286,7 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
             if (len(self.getClassifierFeatures()) > 0):
                 return(self.learner)
             index += 10
-            print("index: %d" % (index))
+            print("index: %d" % (index), file=sys.stderr)
         return(self.learner)
     
     def getClassifierFeatures(self):
@@ -343,7 +344,7 @@ class LinearSVCClassifier(BaseWeakClassifier):
             self.learner.fit(local_X, y)
             if (len(self.getClassifierFeatures()) > 0):
                 return(self.learner)
-            index += 5
+            index += 10
         return(self.learner)
 
     def getClassifierFeatures(self):
@@ -465,7 +466,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         elif (s3 == max(s1, s2, s3)):
             learner_type = 'nu svc'
 
-        print(learner_type)
+        print(learner_type, file=sys.stderr)
         return(learner_type)
         
     def getSingleLearner(self, X, y):
@@ -486,7 +487,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)
         print("Tried 5 times to fit a learner, all chose no features.\
-              len(learners): %d" % (len(self.learners)))
+              len(learners): %d" % (len(self.learners)), file=sys.stderr)
         raise(RuntimeError("Tried 5 times to fit a learner, all chose no features."))
         
     def fit(self, X, y, from_scratch = True):
@@ -497,11 +498,11 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             try:
                 learner_count = int(self.learner_count)
             except:
-                print("learner_count should be an int")
+                print("learner_count should be an int", file=sys.stderr)
                 raise TypeError("learner_count should be an int")
 
             if (not isinstance(self.overlapping_features, bool)):
-                print("overlapping_features should be a Boolean.")
+                print("overlapping_features should be a Boolean.", file=sys.stderr)
                 raise TypeError("overlapping_features should be a Boolean.")
 
             if (self.learner_type == 'logistic regression'):
@@ -518,7 +519,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 self.learner = NuSVCClassifier(n_jobs = self.n_jobs)
             else:
                 print("learner_type must be in ('logistic regression',\
-                                   'linear svc', 'nu svc')")
+                                   'linear svc', 'nu svc')", file=sys.stderr)
                 raise RuntimeError("learner_type must be in ('logistic regression',\
                                    'linear svc', 'nu svc')")
 
@@ -536,9 +537,10 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         return(self)
 
     def add_learner(self, X, y):
+        print("adding learner %d" %(len(self.learners)), file=sys.stderr)
         if (hasattr(self, 'single_learner_failed')):
             print("I'm not stupid, won't try again, learner_count: \
-                  %d" % (self.learner_count))
+                  %d" % (self.learner_count), file=sys.stderr)
             return(self)
             
         X = X.view(np.ndarray)
@@ -546,7 +548,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         try:
             tmp = self.getSingleLearner(X, y)
         except:
-            print(sys.exc_info())
+            print(sys.exc_info(), file=sys.stderr)
             self.single_learner_failed = True
             return(self)
         self.learners.append(tmp)
@@ -585,5 +587,5 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             else:
                 return(result)
         except:
-            print("@@@@@@@ :", sys.exc_info())
+            print("@@@@@@@ :", sys.exc_info(), file=sys.stderr)
         

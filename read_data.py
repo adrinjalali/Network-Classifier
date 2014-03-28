@@ -175,7 +175,7 @@ if __name__ == '__main__':
     ''' load TCGA BRCA data '''
     (tmpX, y, g,
      sample_annotation,
-     feature_annotation) = read_tcga_brca.load_data('ER')
+     feature_annotation) = read_tcga_brca.load_data('stage')
     ''' load TCGA LAML data '''
     #(tmpX, y, g,
     # sample_annotation,
@@ -192,7 +192,7 @@ if __name__ == '__main__':
 
     cpu_count = 30
     max_learner_count = 40
-    fold_count = 30
+    fold_count = 100
     rat_scores = dict()
     all_scores = defaultdict(list)
     cvs = cv.StratifiedShuffleSplit(y, n_iter = fold_count, test_size = 0.2)

@@ -4,6 +4,7 @@
     Adrin Jalali.
     Jan 2014, Saarbruecken, Germany.
 '''
+from __future__ import print_function
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model.base import LinearClassifierMixin
@@ -18,6 +19,8 @@ import numpy as np
 from joblib import Parallel, delayed
 import copy
 import sys
+import math
+
 
 class utilities:
     def exclude_cols(X, cols):
@@ -119,7 +122,7 @@ class PredictBasedFCE(BaseEstimator):
         time, and the ordering of the features doesn't change much.
         '''
         res = (np.arange(len(scores))[scores >
-                                           np.max(scores) * 0.95])
+                                           np.max(scores) * 0.90])
         if (res.shape[0] < 5):
             res = (np.array([t[0] for t in heapq.nlargest(5,
                                                           enumerate(scores),
@@ -136,13 +139,22 @@ class PredictBasedFCE(BaseEstimator):
         return(self._learner.predict(my_X))
         
     def getConfidence(self, X):
+        def phi(x): return(0.5 + 0.5 * math.erf(x / math.sqrt(2)))
+        def my_score(x): return(1 - abs(phi(x) - phi(-x)))
+                
         X = X.view(np.ndarray)
         if (X.ndim == 1):
             X = X.reshape(1, -1)
         
         my_X = X[:,self.getFeatures()]
         y_pred, sigma2_pred = self._learner.predict(my_X, eval_MSE=True)
-        return(sigma2_pred / (abs(y_pred - X[:,self.feature]) + sigma2_pred))
+        res = []
+        for i in range(len(y_pred)):
+            standardized_x = (X[i, self.feature] -
+                              y_pred[i]) / math.sqrt(sigma2_pred[i])
+            res.append(my_score(standardized_x))
+        return(np.array(res))
+        #return(sigma2_pred / (abs(y_pred - X[:,self.feature]) + sigma2_pred))
         #return(1 / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
 
     def getFeatures(self):
@@ -344,19 +356,22 @@ class LinearSVCClassifier(BaseWeakClassifier):
             self.learner.fit(local_X, y)
             if (len(self.getClassifierFeatures()) > 0):
                 return(self.learner)
-            index += 10
+            index += 5
+            print(index, cs)
         return(self.learner)
 
     def getClassifierFeatures(self):
         scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
+        threshold = np.min(abs(scores)) + (
+            np.max(abs(scores)) - np.min(abs(scores))) * 0.0
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
 
     def getClassifierFeatureWeights(self):
         scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
+        threshold = np.min(abs(scores)) + (
+            np.max(abs(scores)) - np.min(abs(scores))) * 0.0
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
         scores = scores[local_cols,]
         features = self.getClassifierFeatures()
@@ -563,7 +578,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         return self.classes_[np.argmax(D, axis=1)]
     '''
     def decision_function(self, X, return_details=False):
-        try:
+        #try:
             X = X.view(np.ndarray)
 
             if (X.ndim == 1):
@@ -586,6 +601,6 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 return((result, predictions, confidences))
             else:
                 return(result)
-        except:
-            print("@@@@@@@ :", sys.exc_info(), file=sys.stderr)
+        #except:
+        #    print("@@@@@@@ :", sys.exc_info(), file=sys.stderr)
         

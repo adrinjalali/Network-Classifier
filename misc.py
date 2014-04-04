@@ -28,12 +28,6 @@ import pickle
 
 
 from constants import *;
-from misc import *
-import read_nordlund1 
-import read_nordlund2
-import read_vantveer
-import read_tcga_brca
-import read_tcga_laml
 from rat import *
 
 def read_csv(file_name, skip_header, delimiter = '\t'):

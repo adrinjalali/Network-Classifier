@@ -1,3 +1,5 @@
+import __future__
+
 import sys;
 import os;
 import numpy as np;
@@ -14,6 +16,7 @@ import sklearn.tree
 from collections import defaultdict
 import time
 from joblib import Parallel, delayed, logger
+
 
 
 from constants import *;
@@ -277,7 +280,7 @@ with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
 a = Rat(learner_count = 10,
-        learner_type = 'logistic regression',
+        learner_type = 'linear svc',
         C = 0.3,
         n_jobs = 30)
 a.fit(tmpX[:60,], y[:60])
@@ -292,6 +295,14 @@ scoring = 'roc_auc',
     n_jobs = 1,
     verbose=1)
 print(np.average(scores))
+
+machine = svm.NuSVC(nu=0.25,
+    kernel='linear',
+    verbose=False,
+    probability=False)
+machine.fit(tmpX[:60,], y[:60])
+threshold = np.min(np.abs(machine.coef_)) + (np.max(np.abs(machine.coef_)) - np.min(np.abs(machine.coef_))) * 0.8
+np.arange(machine.coef_.shape[1])[(abs(machine.coef_) > threshold).flatten()]
 
 
 cs = sklearn.svm.l1_min_c(tmpX, y, loss='l2') * np.logspace(0,2)

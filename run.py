@@ -59,8 +59,11 @@ if __name__ == '__main__':
     print('hi', file=sys.stderr);
 
     working_dir = ''
+    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-LAML/vital_status/'
     method = ''
+    #method = 'ratboost_linear_svc'
     cv_index = -1
+    #cv_index = 10
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
         if (sys.argv[i] == '--working-dir'):

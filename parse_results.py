@@ -1,4 +1,5 @@
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import sys
@@ -7,6 +8,8 @@ import re
 
 def get_scores(root_dir):
     datas = os.listdir(root_dir)
+    datas = [name for name in datas if os.path.isdir(
+        root_dir + '/' + name)]
 
     all_scores = dict(dict(dict(dict())))
 
@@ -75,7 +78,37 @@ def print_log(all_scores):
 
             print(message)
 
+def draw_plot(all_scores, problem):
+    colors = ['b', 'g', 'y', 'k', 'c', 'm', 'r', '0.5', '0.9']
+    index = 0
+    plot_colors = []
+    tmp = list()
+    for method in sorted(all_scores[problem].keys()):
+        print("\t", method)
+        best = 0
+        for parameter in sorted(all_scores[problem][method].keys()):
+            tmp.append(list(all_scores[problem][method][parameter].values()))
+            plot_colors.append(colors[index])
+            values = list(all_scores[problem][method][parameter].values())
+            avg = np.mean(values)
+            if (avg > best):
+                message = ("\t\t%s/%d\t%g +- %g" %(parameter,
+                        len(all_scores[problem][method][parameter].keys()),
+                                                   avg, np.std(values)))
+                best = avg
+        index += 1
+        print(message)
 
+    pl = plt.boxplot(tmp, True)
+    for i in range(len(plot_colors)):
+        pl['boxes'][i].set_c(plot_colors[i])
+    plt.show()
+    
+def draw_plots(all_scores):
+    for problem in sorted(all_scores.keys()):
+        print(problem)
+        draw_plot(all_scores, problem)
+        
 if __name__ == '__main__':
     root_dir = ''
     for i in range(len(sys.argv)):
@@ -84,27 +117,12 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/cluster_data/"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_3/"
 
     all_scores = get_scores(root_dir)
 
     print_log(all_scores)
 
-    colors = ['b', 'g', 'y', 'k', 'c', 'm', 'r', '0.5']
-    for problem in sorted(all_scores.keys()):
-        print(problem)
-        index = 0
-        plot_colors = []
-        tmp = list()
-        for method in sorted(all_scores[problem].keys()):
-            for parameter in sorted(all_scores[problem][method].keys()):
-                tmp.append(list(all_scores[problem][method][parameter].values()))
-                plot_colors.append(colors[index])
-                #break
-            index += 1
+    draw_plots(all_scores)
 
-        pl = plt.boxplot(tmp, True)
-        for i in range(len(plot_colors)):
-            pl['boxes'][i].set_c(plot_colors[i])
-        plt.show()
-        #break
+    draw_plot(all_scores, 'vantveer-prognosis')

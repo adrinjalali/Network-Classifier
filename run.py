@@ -15,6 +15,7 @@ from collections import defaultdict
 import time
 from joblib import Parallel, delayed, logger
 import pickle
+import uuid
 
 
 from constants import *;
@@ -24,13 +25,15 @@ import read_nordlund2
 import read_vantveer
 import read_tcga_brca
 import read_tcga_laml
+import read_tcga_laml_geneexpression
 from rat import *
 
 if __name__ == '__main__':
-    def _f(learner_type):
+    def _f(learner_type, regularizer_index = None):
         print("%s" %(learner_type), file=sys.stderr)
         rat = Rat(learner_count = 1,
                   learner_type = learner_type,
+                  regularizer_index = regularizer_index,
                   n_jobs = 1)
         scores = rat_cross_val_score(
             rat, tmpX, y,
@@ -43,9 +46,13 @@ if __name__ == '__main__':
         scores = np.array(scores)
         commulative_score = dict()
         for i in range(max_learner_count):
-            commulative_score[i + 1] = scores[:,i,0]
+            commulative_score[('N',i + 1)] = scores[:,i,0]
 
-        rat_scores[learner_type] = commulative_score
+        this_method = 'RatBoost'
+        rat_scores[this_method] = dict()
+        rat_scores[this_method][('learner_type', learner_type)] = dict()
+        rat_scores[this_method][('learner_type', learner_type)]\
+          [('regularizer_index', regularizer_index)] = commulative_score
         return(scores)
 
     def _f_alltypes():
@@ -64,6 +71,7 @@ if __name__ == '__main__':
     #method = 'ratboost_linear_svc'
     cv_index = -1
     #cv_index = 10
+    regularizer_index = None
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
         if (sys.argv[i] == '--working-dir'):
@@ -72,8 +80,10 @@ if __name__ == '__main__':
             method = sys.argv[i + 1]
         if (sys.argv[i] == '--cv-index'):
             cv_index = int(sys.argv[i + 1]) - 1
+        if (sys.argv[i] == '--regularizer-index'):
+            regularizer_index = int(sys.argv[i + 1])
 
-    print(working_dir, method, cv_index, file=sys.stderr)
+    print(working_dir, method, cv_index, regularizer_index, file=sys.stderr)
 
     print("loading data...", file=sys.stderr)
 
@@ -92,7 +102,7 @@ if __name__ == '__main__':
     cvs = tmp
     
     cpu_count = 1
-    max_learner_count = 40
+    max_learner_count = 3
     rat_scores = dict()
     all_scores = defaultdict(list)
 
@@ -108,7 +118,9 @@ if __name__ == '__main__':
             scoring = 'roc_auc',
             n_jobs = cpu_count,
             verbose=1)
-        all_scores['original, nuSVM(0.25), linear'].append(scores)
+        this_method = 'SVM, linear kernel'
+        all_scores[this_method] = dict()
+        all_scores[this_method][('nu', 0.25)] = scores
 
         machine = svm.NuSVC(nu=0.25,
                             kernel='rbf',
@@ -120,7 +132,9 @@ if __name__ == '__main__':
             scoring = 'roc_auc',
             n_jobs = cpu_count,
             verbose=1)
-        all_scores['original, nuSVM(0.25), rbf'].append(scores)
+        this_method = 'SVM, RBF kernel'
+        all_scores[this_method] = dict()
+        all_scores[this_method][('nu', 0.25)] = scores
 
         machine = svm.NuSVC(nu=0.25,
                             kernel='linear',
@@ -132,7 +146,9 @@ if __name__ == '__main__':
             scoring = 'roc_auc',
             n_jobs = cpu_count,
             verbose=1)
-        all_scores['transformed, nuSVM(0.25), linear'].append(scores)
+        this_method = 'SVM, linear kernel, transformed'
+        all_scores[this_method] = dict()
+        all_scores[this_method][('nu', 0.25)] = scores
 
         machine = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
                                                               max_depth = 2,
@@ -143,7 +159,9 @@ if __name__ == '__main__':
             scoring = 'roc_auc',
             n_jobs = cpu_count,
             verbose=1)
-        all_scores['gradientboostingclassifier'].append(scores)
+        this_method = 'Gradient Boosting Classifier'
+        all_scores[this_method] = dict()
+        all_scores[this_method][('N', 200)] = scores
 
         machine = sklearn.ensemble.AdaBoostClassifier(
             sklearn.tree.DecisionTreeClassifier(max_depth=1),
@@ -155,28 +173,35 @@ if __name__ == '__main__':
             scoring = 'roc_auc',
             n_jobs = cpu_count,
             verbose=1)
-        all_scores['adaboost'].append(scores)
+        this_method = 'Adaboost'
+        all_scores[this_method] = dict()
+        all_scores[this_method][('N', 100)] = scores
 
         print_log(all_scores, rat_scores)
 
-        dump_scores(working_dir + '/results/%s-%d-others.dmp' % (method, cv_index),
+        dump_scores(working_dir + '/results/%s-%d-others-%s.dmp' % \
+                    (method, cv_index, str(uuid.uuid1())),
                     all_scores)
         
     elif (method == 'ratboost_logistic_regression'):
-        _f("logistic regression")
+        _f("logistic regression", regularizer_index)
         print_log(all_scores, rat_scores)
-        dump_scores(working_dir + '/results/%s-%d-rat.dmp' % (method, cv_index),
+        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
+                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
                     rat_scores)
     elif (method == 'ratboost_linear_svc'):
-        _f("linear svc")
+        _f("linear svc", regularizer_index)
         print_log(all_scores, rat_scores)
-        dump_scores(working_dir + '/results/%s-%d-rat.dmp' % (method, cv_index),
+        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
+                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
                     rat_scores)
     elif (method == 'ratboost_nu_svc'):
-        _f("nu svc")
+        _f("nu svc", regularizer_index)
         print_log(all_scores, rat_scores)
-        dump_scores(working_dir + '/results/%s-%d-rat.dmp' % (method, cv_index),
+        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
+                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
                     rat_scores)
 
+    
     print('bye', file=sys.stderr)
 

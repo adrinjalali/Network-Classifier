@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 #usage: ./clearresults.sh target_folder
 
 process_problem(){
@@ -18,3 +18,6 @@ process_problem $1 TCGA-BRCA stage
 
 process_problem $1 TCGA-LAML vital_status
 process_problem $1 TCGA-LAML risk_group
+
+process_problem $1 TCGA-LAML-GeneExpression vital_status
+process_problem $1 TCGA-LAML-GeneExpression risk_group

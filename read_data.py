@@ -279,7 +279,7 @@ a.fit(tmpX, y)
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 10,
+a = Rat(learner_count = 2,
         learner_type = 'linear svc',
         C = 0.3,
         n_jobs = 30)
@@ -290,7 +290,6 @@ a.score(tmpX, y)
 scores = cv.cross_val_score(
     a, tmpX, y,
     cv=5,
-
 scoring = 'roc_auc',
     n_jobs = 1,
     verbose=1)

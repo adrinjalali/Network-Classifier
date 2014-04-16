@@ -28,6 +28,7 @@ import read_nordlund2
 import read_vantveer
 import read_tcga_brca
 import read_tcga_laml
+import read_tcga_laml_geneexpression
 from rat import *
 
 def add_vertex(g, vertex_map_name2index, vertex_map_index2name, name):
@@ -127,8 +128,9 @@ def plot_learners(test_sample):
     vxlabel = tmp_g.new_vertex_property('string')
     vshape = tmp_g.new_vertex_property('string')
 
-    confidences = dict()
-    
+    l_cdfs = dict()
+    v_cdfs = dict()
+
     for i in range(len(a.learners)):
         print('========================')
         print(a.learners[i].getClassifierFeatures())
@@ -136,11 +138,12 @@ def plot_learners(test_sample):
         cur_vertex, is_new = add_vertex(g = tmp_g,
             vertex_map_name2index = vertex_map_name2index,
             vertex_map_index2name = vertex_map_index2name,
-            name = 'l_%d' % i)
+            name = 'L_%d' % i)
         #vwidth[cur_vertex] = '1.5'
         #vheight[cur_vertex] = '2'
-        vcolor[cur_vertex] = a.learners[i].getConfidence(test_sample) / 5
-        vxlabel[cur_vertex] = 'l_%d' % i
+        l_cdfs[cur_vertex] = a.learners[i].getConfidence(test_sample)
+        print(i, a.learners[i].getConfidence(test_sample))
+        vxlabel[cur_vertex] = 'L_%d' % i
         vshape[cur_vertex] = node_shapes[i]
         target_vertex = cur_vertex
         
@@ -152,9 +155,11 @@ def plot_learners(test_sample):
 
             #vwidth[cur_vertex] = '1.5'
             #vheight[cur_vertex] = '2'
-            vcolor[cur_vertex] = a.learners[i]._FCEs[gene].\
+            v_cdfs[cur_vertex] = a.learners[i]._FCEs[gene].\
               getConfidence(test_sample)[0] * \
               a.learners[i].getClassifierFeatureWeights()[gene]
+            print(gene, a.learners[i]._FCEs[gene].\
+              getConfidence(test_sample)[0])
             vxlabel[cur_vertex] = feature_annotation[gene]
             vshape[cur_vertex] = node_shapes[i]
 
@@ -172,6 +177,15 @@ def plot_learners(test_sample):
                     vertex_map_name2index[parent],
                     vertex_map_name2index[gene])
             '''
+    l_minmax = (min(list(l_cdfs.values())),
+                max(list(l_cdfs.values())))
+    v_minmax = (min(list(v_cdfs.values())),
+                max(list(v_cdfs.values())))
+    for v, c in l_cdfs.items():
+        vcolor[v] = (c - l_minmax[0]) / (l_minmax[1] - l_minmax[0])
+    for v, c in v_cdfs.items():
+        vcolor[v] = (c - v_minmax[0]) / (v_minmax[1] - v_minmax[0])
+        
     gt.draw.graphviz_draw(tmp_g, layout='twopi',
                           size=(25,15),
                           vcolor=vcolor,
@@ -180,9 +194,84 @@ def plot_learners(test_sample):
                                     'shape': vshape,
                                     'height': vheight,
                                     'width': vwidth})
+
+def plot_features_on_graph(rat, g, test_sample):
+    node_shapes = ['box', 'ellipse',
+                   'triangle', 'diamond',
+                   'trapezium', 'parallelogram',
+                   'house', 'pentagon', 'hexagon',
+                   'septagon', 'octagon', 'invtriangle']
+
+    tmp_g = g.copy()
+    vxlabel = tmp_g.new_vertex_property('string')
+    vcolor = tmp_g.new_vertex_property('string')
+    vshape = tmp_g.new_vertex_property('string')
+    vpenwidth = tmp_g.new_vertex_property('double')
+    included = tmp_g.new_vertex_property('bool')
+    is_feature = dict()
+    vscore = dict()
+    lvscore = dict()
+
+    for l_idx, l in zip(range(len(rat.learners)), rat.learners):
+        for i in l.getClassifierFeatures():
+            vscore[tmp_g.vertex(i)] = \
+              l._FCEs[i].getConfidence(test_sample).reshape(-1)[0]
+            vshape[tmp_g.vertex(i)] = node_shapes[l_idx]
+            is_feature[tmp_g.vertex(i)] = True
+            lvscore[tmp_g.vertex(i)] = \
+              l.getConfidence(test_sample).reshape(-1)[0]
+            for j in l.getClassifierFeatures():
+                path = gt.topology.shortest_path(g,
+                                                 g.vertex(i),
+                                                 g.vertex(j))[0]
+                for v in path:
+                    included[v] = True
+                    vxlabel[v] = feature_annotation[int(v)]
+                    if (not v in is_feature):
+                        vcolor[v] = 'white'
+                        vshape[v] = 'circle'
+                        vpenwidth[v] = 1
+
+    vcmap = mpl.cm.summer
+    v_minmax = (min(list(vscore.values())),
+                max(list(vscore.values())))
+    vnorm = mpl.colors.Normalize(vmin=v_minmax[0], vmax=v_minmax[1])
+    for v, s in vscore.items():
+        color = tuple([int(c * 255.0) for c in vcmap(vnorm(s))])
+        vcolor[v] = "#%.2x%.2x%.2x%.2x" % color
+
+    lv_minmax = (min(list(lvscore.values())),
+                 max(list(lvscore.values())))
+    lvnorm = mpl.colors.Normalize(vmin=lv_minmax[0], vmax=lv_minmax[1])
+    for v, s in lvscore.items():
+        vpenwidth[v] = 1 + lvnorm(s) * 5
+
+    tmp_g.set_vertex_filter(included)
+    tmp_g.set_edge_filter(gt.topology.min_spanning_tree(tmp_g))
+
+    while (True):
+        flag = False
+        tmp_g2 = gt.GraphView(tmp_g, vfilt = included)
+        for v in tmp_g2.vertices():
+            if (v.in_degree() == 1 or v.out_degree() == 1):
+                if (not tmp_g.vertex(int(v)) in is_feature):
+                    included[tmp_g.vertex(int(v))] = False
+                    flag = True
+
+        tmp_g.set_vertex_filter(included)
+        if (not flag):
+            break
+        
+    gt.draw.graphviz_draw(tmp_g, layout = 'twopi',
+                          vcolor=vcolor,
+                          vprops = {'label': vxlabel,
+                                    'width': 1,
+                                    'shape': vshape,
+                                    'penwidth': vpenwidth})
     
+        
 # feature extraction stuff
-working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-LAML/risk_group/'
+working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_5/TCGA-LAML/risk_group/'
 #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-BRCA/N/'
 method = 'ratboost_linear_svc'
 cv_index = 70
@@ -207,9 +296,9 @@ cvs = tmp
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 10,
+a = Rat(learner_count = 5,
         learner_type = 'linear svc',
-        C = 0.3,
+        regularizer_index = 7,
         n_jobs = 15)
 #a.fit(tmpX[:60,], y[:60])
 train, test = cvs[0]
@@ -218,11 +307,18 @@ a.fit(tmpX[train,], y[train])
 plot_graph(hilight_learner = 4, test_sample=tmpX[[0],:],
            color_scheme = 'learner')
 
-plot_learners(test_sample=tmpX[[test[0]],:])
+plot_learners(test_sample=tmpX[[test[30]],:])
+
+plot_features_on_graph(a, g, tmpX[[test[5]],])
 
 
-sm = mpl.cm.ScalarMappable(norm=mpl.cm.colors.Normalize(),
-                      cmap=plt.get_cmap('spectral'))
+scores = cv.cross_val_score(
+    a, tmpX, y,
+    cv=5,
+    scoring = 'roc_auc',
+    n_jobs = 1,
+    verbose=1)
+print(np.average(scores))
 
 machine = svm.NuSVC(nu=0.25,
     kernel='linear',
@@ -231,3 +327,28 @@ machine = svm.NuSVC(nu=0.25,
 machine.fit(tmpX[:60,], y[:60])
 threshold = np.min(np.abs(machine.coef_)) + (np.max(np.abs(machine.coef_)) - np.min(np.abs(machine.coef_))) * 0.8
 np.arange(machine.coef_.shape[1])[(abs(machine.coef_) > threshold).flatten()]
+
+
+local_X = tmpX[train,]
+local_y = y[train,]
+index = 5
+cs = sklearn.svm.l1_min_c(local_X, local_y, loss='l2') * np.logspace(0,5)
+learner = sklearn.svm.LinearSVC(C = 0.001,
+            penalty = 'l1',
+            dual = False)
+while (index < len(cs)):
+    learner.set_params(C = cs[index])
+    learner.fit(local_X, local_y)
+    #if (len(self.getClassifierFeatures()) > 0):
+    #    return(self.learner)
+    index += 5
+    print(sklearn.metrics.roc_auc_score(y[train],
+                                        learner.decision_function(tmpX[train,])))
+    print(sklearn.metrics.roc_auc_score(y[test],
+                                        learner.decision_function(tmpX[test,])))
+    print(index, cs[index])
+    scores = learner.coef_.reshape(-1)
+    print(len([i for i in range(len(scores)) if scores[i] != 0]))
+return(self.learner)
+
+sklearn.metrics.roc_auc_score(y[train], a.decision_function(tmpX[train,]))

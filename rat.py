@@ -241,16 +241,30 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         return(self)
 
     def getConfidence(self, X):
-        result = 1.0
-        feature_weights = self.getClassifierFeatureWeights()
-        weight_sum = 0.0
-        for key, fc in self._FCEs.items():
-            result += fc.getConfidence(X) * abs(feature_weights[key])
-            weight_sum += abs(feature_weights[key])
-        if (hasattr(self.learner, 'predict_proba')):
-            return((result / weight_sum) * np.max(self.predict_proba(X), axis=1))
-        else:
-            return((result / weight_sum) * abs(self.decision_function(X)))
+        def phi(x): return(0.5 + 0.5 * math.erf(x / math.sqrt(2)))
+        def my_score(x): return(abs(phi(x) - phi(-x)))
+            
+        X = X.view(np.ndarray)
+
+        if (X.ndim == 1):
+            X = X.reshape(1,-1)
+            
+        res = []
+        for i in range(len(X)):
+            result = 1.0
+            feature_weights = self.getClassifierFeatureWeights()
+            weight_sum = 0.0
+            for key, fc in self._FCEs.items():
+                result += fc.getConfidence(X[i,]) * abs(feature_weights[key])
+                weight_sum += abs(feature_weights[key])
+            #return (result / weight_sum)
+            if (hasattr(self.learner, 'predict_proba')):
+                res.append((result / weight_sum) * \
+                       my_score(np.max(self.predict_proba(X[[i],]))))
+            else:
+                res.append((result / weight_sum) \
+                           * my_score(self.decision_function(X[[i],])))
+        return(np.array(res).reshape(-1))
         
     def getAllFeatures(self):
         features = self.getClassifierFeatures()
@@ -273,31 +287,31 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
                  excluded_features=None,
                  feature_confidence_estimator=PredictBasedFCE(),
-                 C = 0.2):
+                 regularizer_index = 10):
         learner = LogisticRegression(penalty = 'l1',
                                      dual = False,
-                                     C = C,
                                      fit_intercept = True)
+        self.regularizer_index = regularizer_index
         super(LogisticRegressionClassifier, self).__init__(
             learner, n_jobs, excluded_features, feature_confidence_estimator)
 
     def get_params(self, deep=True):
         return( {
-            'C':self.learner.get_params()['C'],
+            'regularizer_index':self.regularizer_index,
             'excluded_features':self.excluded_features,
             'feature_confidence_estimator':self.feature_confidence_estimator,
             'n_jobs':self.n_jobs})
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        index = 15
-        cs = sklearn.svm.l1_min_c(local_X, y, loss='log') * np.logspace(0,2)
+        index = self.regularizer_index
+        cs = sklearn.svm.l1_min_c(local_X, y, loss='log') * np.logspace(0,5)
         while (index < len(cs)):
             self.learner.set_params(C = cs[index])
             self.learner.fit(local_X, y)
             if (len(self.getClassifierFeatures()) > 0):
                 return(self.learner)
-            index += 10
+            index += 5
             print("index: %d" % (index), file=sys.stderr)
         return(self.learner)
     
@@ -333,24 +347,24 @@ class LinearSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
                  excluded_features=None,
                  feature_confidence_estimator=PredictBasedFCE(),
-                 C = 0.2):
-        learner = sklearn.svm.LinearSVC(C = C,
-                                        penalty = 'l1',
+                 regularizer_index = 10):
+        learner = sklearn.svm.LinearSVC(penalty = 'l1',
                                         dual = False)
+        self.regularizer_index = regularizer_index
         super(LinearSVCClassifier, self).__init__(
             learner, n_jobs, excluded_features, feature_confidence_estimator)
 
     def get_params(self, deep=True):
         return( {
-            'C':self.learner.get_params()['C'],
+            'regularizer_index':self.regularizer_index,
             'excluded_features':self.excluded_features,
             'feature_confidence_estimator':self.feature_confidence_estimator,
             'n_jobs':self.n_jobs})
 
     def get_learner(self, X, y):
         local_X = self._transform(X)
-        index = 15
-        cs = sklearn.svm.l1_min_c(local_X, y, loss='l2') * np.logspace(0,2)
+        index = self.regularizer_index
+        cs = sklearn.svm.l1_min_c(local_X, y, loss='l2') * np.logspace(0,5)
         while (index < len(cs)):
             self.learner.set_params(C = cs[index])
             self.learner.fit(local_X, y)
@@ -421,13 +435,13 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                  learner_count=10,
                  learner_type='linear svc',
                  overlapping_features=False,
-                 C = None,
+                 regularizer_index = None,
                  n_jobs = 1):
         
         self.learner_count = learner_count
         self.learner_type = learner_type
         self.overlapping_features = overlapping_features
-        self.C = C
+        self.regularizer_index = regularizer_index
         self.n_jobs = n_jobs
 
     def get_params(self, deep=True):
@@ -435,58 +449,10 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             'learner_count':self.learner_count,
             'learner_type':self.learner_type,
             'overlapping_features':self.overlapping_features,
-            'C':self.C,
+            'regularizer_index':self.regularizer_index,
             'n_jobs':self.n_jobs})
-
-    '''
-    def set_params(self, **parameters):
-        self.__init__(**parameters)
-        return(self)
-    '''
-    
-    def chooseLearnerType(self, X, y):
-        cvs = cv.StratifiedShuffleSplit(y, n_iter = 30, test_size = 0.2)
-
-        learner = LogisticRegressionClassifier(C = 0.3, n_jobs = 1)
-        scores = cv.cross_val_score(
-            learner, X, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = self.n_jobs,
-            verbose=0)
-        s1 = np.mean(scores)
-        
-        learner = LinearSVCClassifier(C = 0.2, n_jobs = 1)
-        scores = cv.cross_val_score(
-            learner, X, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = self.n_jobs,
-            verbose=0)
-        s2 = np.mean(scores)
-        
-        learner = NuSVCClassifier(n_jobs = 1)
-        scores = cv.cross_val_score(
-            learner, X, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = self.n_jobs,
-            verbose=0)
-        s3 = np.mean(scores)
-
-        if (s1 == max(s1, s2, s3)):
-            learner_type = 'logistic regression'
-        elif (s2 == max(s1, s2, s3)):
-            learner_type = 'linear svc'
-        elif (s3 == max(s1, s2, s3)):
-            learner_type = 'nu svc'
-
-        print(learner_type, file=sys.stderr)
-        return(learner_type)
-        
+            
     def getSingleLearner(self, X, y):
-        #self.learner_type = self.chooseLearnerType(X, y)
-        
         for i in range(5):
             rs = cv.ShuffleSplit(n=X.shape[0], n_iter=1,
                                  train_size=0.9)
@@ -521,15 +487,17 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 raise TypeError("overlapping_features should be a Boolean.")
 
             if (self.learner_type == 'logistic regression'):
-                if (self.C == None):
-                    self.C = 0.3
-                self.learner = LogisticRegressionClassifier(C = self.C,
-                                                            n_jobs = self.n_jobs)
+                if (self.regularizer_index == None):
+                    self.regularizer_index = 15
+                self.learner = LogisticRegressionClassifier(
+                    regularizer_index = self.regularizer_index,
+                    n_jobs = self.n_jobs)
             elif (self.learner_type == 'linear svc'):
-                if (self.C == None):
-                    self.C = 0.1
-                self.learner = LinearSVCClassifier(C = self.C,
-                                                   n_jobs = self.n_jobs)
+                if (self.regularizer_index == None):
+                    self.regularizer_index = 15
+                self.learner = LinearSVCClassifier(
+                    regularizer_index = self.regularizer_index,
+                    n_jobs = self.n_jobs)
             elif (self.learner_type == 'nu svc'):
                 self.learner = NuSVCClassifier(n_jobs = self.n_jobs)
             else:

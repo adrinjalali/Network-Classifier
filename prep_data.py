@@ -24,6 +24,7 @@ import read_nordlund2
 import read_vantveer
 import read_tcga_brca
 import read_tcga_laml
+import read_tcga_laml_geneexpression
 from rat import *
 
 if __name__ == '__main__':
@@ -70,6 +71,13 @@ if __name__ == '__main__':
             (tmpX, y, g,
              sample_annotation,
              feature_annotation) = read_tcga_laml.load_data(target_name)
+    elif (data_name == 'TCGA-LAML-GeneExpression'):
+        ''' load TCGA LAML data '''
+        if (target_name in {'vital_status', 'risk_group'}):
+            (tmpX, y, g,
+             sample_annotation,
+             feature_annotation) = read_tcga_laml_geneexpression.load_data(
+                 target_name)
 
     print("calculating L and transformation of the data...")
     B = gt.spectral.laplacian(g)

@@ -63,16 +63,22 @@ def reload_rat():
         code = compile(f.read(), "rat.py", 'exec')
         exec(code)
 
-def print_log(all_scores, rat_scores):
+def print_scores(prefix, scores):
+    if isinstance(scores, dict):
+        for key in sorted(scores.keys()):
+            value = scores[key]
+            if (prefix != ''):
+                print_scores("%s (%s)" %(prefix, str(key)), value)
+            else:
+                print(key)
+                print_scores("\t", value)
+    else:
+        print("%s: %.3lg +/- %.3lg" % (prefix, np.mean(scores), 2 * np.std(scores)))
+        
+def print_log(all_scores, rat_scores = dict()):
     print('=========')
-    def statstr(v):
-        return("%.3lg +/- %.3lg" % (np.mean(v), 2 * np.std(v)))
-    for key, value in all_scores.items():
-        print("test auc %s: " % (key), statstr(value))
-    for key, value in rat_scores.items():
-        print("test auc %s:" % (key))
-        for key2 in sorted(value.keys()):
-            print("\t%s: " % (key2), statstr(value[key2]))
+    print_scores('', all_scores)
+    print_scores('', rat_scores)
 
 def dump_scores(file_name, scores):
     import pickle

@@ -16,16 +16,11 @@ import time
 from joblib import Parallel, delayed, logger
 import pickle
 import uuid
+import re
 
 
 from constants import *;
 from misc import *
-import read_nordlund1 
-import read_nordlund2
-import read_vantveer
-import read_tcga_brca
-import read_tcga_laml
-import read_tcga_laml_geneexpression
 from rat import *
 
 if __name__ == '__main__':
@@ -35,7 +30,7 @@ if __name__ == '__main__':
                   learner_type = learner_type,
                   regularizer_index = regularizer_index,
                   n_jobs = 1)
-        scores = rat_cross_val_score(
+        result = rat_cross_val_score(
             rat, tmpX, y,
             cv=cvs,
             scoring = 'roc_auc',
@@ -43,6 +38,12 @@ if __name__ == '__main__':
             verbose=1,
             max_learner_count = max_learner_count)
 
+        if (len(result) == 1):
+            models = result[0][1]
+        else:
+            models = [m for s, m in result]
+        
+        scores = [s for s, m in result]
         scores = np.array(scores)
         commulative_score = dict()
         for i in range(max_learner_count):
@@ -53,7 +54,7 @@ if __name__ == '__main__':
         rat_scores[this_method][('learner_type', learner_type)] = dict()
         rat_scores[this_method][('learner_type', learner_type)]\
           [('regularizer_index', regularizer_index)] = commulative_score
-        return(scores)
+        return((scores, models))
 
     def _f_alltypes():
         _f("logistic regression")
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     cvs = tmp
     
     cpu_count = 1
-    max_learner_count = 3
+    max_learner_count = 30
     rat_scores = dict()
     all_scores = defaultdict(list)
 
@@ -183,24 +184,26 @@ if __name__ == '__main__':
                     (method, cv_index, str(uuid.uuid1())),
                     all_scores)
         
-    elif (method == 'ratboost_logistic_regression'):
-        _f("logistic regression", regularizer_index)
+    elif (method.startswith('ratboost')):
+        '''
+        method should be one of:
+        ratboost_logistic_regression
+        ratboost_linear_svc
+        ratboost_nu_svc
+        ''' 
+        rat_method = ' '.join(re.split('_', method)[1:])
+        scores, model = _f(rat_method, regularizer_index)
         print_log(all_scores, rat_scores)
         dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
                     (method, cv_index, regularizer_index, str(uuid.uuid1())),
                     rat_scores)
-    elif (method == 'ratboost_linear_svc'):
-        _f("linear svc", regularizer_index)
-        print_log(all_scores, rat_scores)
-        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
-                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
-                    rat_scores)
-    elif (method == 'ratboost_nu_svc'):
-        _f("nu svc", regularizer_index)
-        print_log(all_scores, rat_scores)
-        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
-                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
-                    rat_scores)
+        model_structure = [{f : (l.getClassifierFeatureWeights()[f],
+                                 l._FCEs[f].getFeatures())
+                                 for f in l.getClassifierFeatures()}
+                                 for l in model.learners]
+        pickle.dump(model_structure,
+                    open(working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
+                    (method, cv_index, regularizer_index, str(uuid.uuid1())), 'wb'))
 
     
     print('bye', file=sys.stderr)

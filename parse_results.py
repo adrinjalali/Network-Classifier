@@ -5,6 +5,9 @@ import pickle
 import sys
 import os
 import re
+import glob
+
+from itertools import chain
 
 from misc import *
 
@@ -64,8 +67,13 @@ def get_scores(root_dir):
             for f in files:
                 #print('%s/%s/results/%s' % (
                 #    data, target, f))
-                scores = pickle.load(open('%s/%s/%s/results/%s' % (
-                    root_dir, data, target, f), 'rb'))
+                try:
+                    scores = pickle.load(open('%s/%s/%s/results/%s' % (
+                        root_dir, data, target, f), 'rb'))
+                except EOFError as e:
+                    print(e)
+                    print('%s/%s/results/%s' % (
+                        data, target, f))
 
                 method, cv_index, major = re.split('[-\.]', f)[:3]
                 cv_index = int(cv_index)
@@ -110,7 +118,7 @@ def draw_plot(all_scores, problem):
     plot_colors = []
     plot_texts = []
     tmp = list()
-    print_scores('', all_scores[problem])
+    print_scores(all_scores[problem])
     for method in methods_order:
         if not method in all_scores[problem]:
             continue
@@ -153,7 +161,83 @@ def draw_plots(all_scores):
     for problem in sorted(all_scores.keys()):
         print(problem)
         draw_plot(all_scores, problem)
-        
+
+
+def load_models_info(root_dir, regularizer_index, learner_count):
+    datas = os.listdir(root_dir)
+    datas = [name for name in datas if os.path.isdir(
+        root_dir + '/' + name)]
+
+    tmp_g = gt.Graph(directed = False)
+    vertex_map_name2index = dict()
+    vertex_map_index2name = dict()
+    
+
+    for data in datas:
+        print(data)
+        targets = os.listdir(root_dir + '/' + data)
+
+        for target in targets:
+            print(target)
+            files = glob.glob('%s/%s/%s/models/*-rat-%d-*' % (root_dir,
+                                                      data,
+                                                      target,
+                                                      regularizer_index))
+            structs = list()
+            for f in files:
+                struct = pickle.load(open(f, 'rb'))
+                structs.append(struct)
+
+            node_groups = [[list(m.keys()) for
+                            m in s[:learner_count]]
+                            for s in structs]
+            nodes = sorted(set(chain.from_iterable(
+                chain.from_iterable(node_groups))))
+
+            adj = np.zeros(shape=(len(nodes), len(nodes)))
+            for s in structs:
+                for m in s[:learner_count]:
+                    for i in m:
+                        for j in m:
+                            if i != j:
+                                v1 = nodes.index(i)
+                                v2 = nodes.index(j)
+                                adj[v1,v2] = adj[v1,v2] + 1
+                                #adj[v2,v1] = adj[v2,v1] + 1
+
+
+        from scipy.stats import gaussian_kde
+        import matplotlib.pyplot as plt
+        density = gaussian_kde(adj[adj != 0])
+        xs = np.linspace(0, max(adj[adj != 0]), 200)
+        #density.covariance_factor = lambda : .25
+        #density._compute_covariance()
+        plt.plot(xs, density(xs))
+        plt.show()
+
+
+                                
+        for b in range(10):
+            tmp_g = gt.Graph(directed = False)
+            tmp_g.add_vertex(len(nodes))
+            edge_weights = tmp_g.new_edge_property('double')
+            for i in range(len(nodes)):
+                for j in range(len(nodes)):
+                    if i > j and adj[i,j] > 30:
+                        e = tmp_g.add_edge(i, j)
+                        edge_weights[e] = 1 + 1/adj[i,j]
+
+            gt.draw.graphviz_draw(tmp_g, layout='twopi',
+                          size=(25,15),
+                          #vcolor=vcolor,
+                          #vcmap=plt.get_cmap('Blues'),
+                          #vprops = {'label': vxlabel,
+                          #          'shape': vshape,
+                          #          'height': vheight,
+                          #          'width': vwidth},
+                          eprops = {'len': edge_weights})
+            input()
+
 if __name__ == '__main__':
     root_dir = ''
     for i in range(len(sys.argv)):
@@ -166,10 +250,10 @@ if __name__ == '__main__':
 
     all_scores = get_scores(root_dir)
 
-    print_log(all_scores)
+    print_scores(all_scores)
 
     draw_plots(all_scores)
-
+    
     draw_plot(all_scores, 'vantveer-prognosis')
     # stabilize results ( multiple runs )
     # make the plots

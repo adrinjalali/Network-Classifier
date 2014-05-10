@@ -63,22 +63,44 @@ def reload_rat():
         code = compile(f.read(), "rat.py", 'exec')
         exec(code)
 
-def print_scores(prefix, scores):
+def get_max_score(scores, prefix = ''):
     if isinstance(scores, dict):
-        for key in sorted(scores.keys()):
-            value = scores[key]
-            if (prefix != ''):
-                print_scores("%s (%s)" %(prefix, str(key)), value)
-            else:
-                print(key)
-                print_scores("\t", value)
+        items = [get_max_score(v, prefix + ' %s' % (str(k))) for
+                k, v in scores.items()]
+        return(max(items, key=lambda x:x[1]))
     else:
-        print("%s: %.3lg +/- %.3lg" % (prefix, np.mean(scores), 2 * np.std(scores)))
+        return(prefix + ' (count: %d)' % (len(list(scores))), np.median(scores),
+               np.std(scores))
+        
+def print_scores(scores, prefix = ''):
+    report_max = ['N', 'learner_type']
+    ignore_params = ['learner_type']
+    if isinstance(scores, dict):
+        key0 = next(iter(scores.keys()))
+        if isinstance(key0, tuple) and key0[0] in report_max:
+            txt, m, v = get_max_score(scores, prefix)
+            message = "%s: %.3lg +/- %.3lg" % (txt, m, v)
+        else:
+            for key in sorted(scores.keys()):
+                value = scores[key]
+                if (prefix != ''):
+                    print_scores(value, "%s %s" %(prefix, str(key)))
+                else:
+                    print('\n', key)
+                    print_scores(value, "\t")
+            return
+    else:
+        message = "%s: %.3lg +/- %.3lg" % (prefix,
+                                           np.mean(scores),
+                                           2 * np.std(scores))
+    for s in ignore_params:
+        message = re.sub(" *\('%s.*'\) *" % (s), ' ', message)
+    print(message)
         
 def print_log(all_scores, rat_scores = dict()):
     print('=========')
-    print_scores('', all_scores)
-    print_scores('', rat_scores)
+    print_scores(all_scores)
+    print_scores(rat_scores)
 
 def dump_scores(file_name, scores):
     import pickle
@@ -136,7 +158,7 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose, parameters,
             end_msg = "%s -%s" % (msg, logger.short_format_time(scoring_time))
             print("[CV] %s %s" % ((64 - len(end_msg)) * '.', end_msg))
 
-    return result
+    return (result, estimator)
         
 def rat_cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
                     verbose=0, fit_params=None, score_func=None,
@@ -159,8 +181,7 @@ def rat_cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
     fit_params['from_scratch'] = True
     collected_scores = dict()
     scorer = sklearn.metrics.scorer.get_scorer(scoring)
-    scorer = sklearn.metrics.scorer.get_scorer(scoring)
-    scores = parallel(
+    result = parallel(
         delayed(_fit_and_score)(
             estimator,
             X, y, scorer,
@@ -168,6 +189,6 @@ def rat_cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
             verbose, None, fit_params,
             max_learner_count = max_learner_count)
         for train, test in cv)
-
-    return (scores)
+    
+    return (result)
 

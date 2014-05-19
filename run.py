@@ -165,8 +165,8 @@ if __name__ == '__main__':
         all_scores[this_method][('N', 200)] = scores
 
         machine = sklearn.ensemble.AdaBoostClassifier(
-            sklearn.tree.DecisionTreeClassifier(max_depth=1),
-            algorithm = "SAMME",
+            sklearn.tree.DecisionTreeClassifier(max_depth=2),
+            algorithm = "SAMME.R",
             n_estimators = 100)
         scores = cv.cross_val_score(
             machine, tmpX, y,

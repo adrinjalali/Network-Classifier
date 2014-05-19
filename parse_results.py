@@ -8,6 +8,7 @@ import re
 import glob
 
 from itertools import chain
+from scipy.stats import gaussian_kde
 
 from misc import *
 
@@ -96,13 +97,29 @@ def add_text(prefix, parameter):
     return ('NA')
         
 
-def flatten_scores_dict(scores):
+
+def ignore_key(key, filters):
+    if filters == None:
+        return False
+    elif isinstance(filters, tuple):
+        if filters[0] == key[0] and filters[1] != key[1]:
+            return True
+    else:
+        for f in filters:
+            if f[0] == key[0] and f[1] != key[1]:
+                return True
+
+    return False
+
+def flatten_scores_dict(scores, filters = None):
     res = list()
     labels = list()
     for key in sorted(scores.keys()):
+        if ignore_key(key, filters):
+            continue
         value = scores[key]
         if isinstance(value, dict):
-            _scores, _labels = flatten_scores_dict(value)
+            _scores, _labels = flatten_scores_dict(value, filters)
             for label in _labels:
                 labels.append(add_text(label, key))
             for s in _scores:
@@ -112,7 +129,7 @@ def flatten_scores_dict(scores):
             labels.append(add_text('', key))
     return(res, labels)
 
-def draw_plot(all_scores, problem):
+def draw_plot(all_scores, problem, filters = None, plt_ax = None):
     colors = ['b', 'g', 'y', 'k', 'c', 'r', 'm', '0.5', '0.9']
     index = 0
     plot_colors = []
@@ -122,7 +139,7 @@ def draw_plot(all_scores, problem):
     for method in methods_order:
         if not method in all_scores[problem]:
             continue
-        _scores, _texts = flatten_scores_dict(all_scores[problem][method])
+        _scores, _texts = flatten_scores_dict(all_scores[problem][method], filters)
         for s in _scores:
             tmp.append(s)
 
@@ -132,8 +149,10 @@ def draw_plot(all_scores, problem):
             plot_colors.append(colors[index])
         index += 1
 
-    #plt.subplot(211)
-    fig, ax = plt.subplots()
+    if (plt_ax is None):
+        fig, ax = plt.subplots()
+    else:
+        ax = plt_ax
     pl = ax.boxplot(tmp, True)
     last_color = None
     idx = 0
@@ -147,15 +166,26 @@ def draw_plot(all_scores, problem):
             nms.append(methods_order[idx])
             idx += 1
         last_color = plot_colors[i]
-    lgnd = plt.legend(objs, nms, fancybox=True)
+    #lgnd = plt.legend(objs, nms, fancybox=True)
+    lgnd = plt.legend(objs, nms, bbox_to_anchor=[-1.6, -2.1, 2, 2],
+                      loc='upper center',
+              ncol=3,
+              mode="expand",
+              borderaxespad=0.,
+              fancybox=True
+              )
+    #lgnd.draggable(True)
     for l in lgnd.get_lines():
         l.set_linewidth(3)
-    plt.suptitle(dataset_resolve[problem])
+    ax.set_title(dataset_resolve[problem])
     
     texts = ax.set_xticklabels(plot_texts)
     for text in texts:
         text.set_rotation(270)
-    plt.show()
+    if (plt_ax is None):
+        plt.show()
+
+    return (objs, nms)
     
 def draw_plots(all_scores):
     for problem in sorted(all_scores.keys()):
@@ -168,9 +198,6 @@ def load_models_info(root_dir, regularizer_index, learner_count):
     datas = [name for name in datas if os.path.isdir(
         root_dir + '/' + name)]
 
-    tmp_g = gt.Graph(directed = False)
-    vertex_map_name2index = dict()
-    vertex_map_index2name = dict()
     
 
     for data in datas:
@@ -194,6 +221,13 @@ def load_models_info(root_dir, regularizer_index, learner_count):
             nodes = sorted(set(chain.from_iterable(
                 chain.from_iterable(node_groups))))
 
+            vertex_map_name2index = dict()
+            vertex_map_index2name = dict()
+
+            for i in range(len(nodes)):
+                vertex_map_name2index[nodes[i]] = i
+                vertex_map_index2name[i] = nodes[i]
+
             adj = np.zeros(shape=(len(nodes), len(nodes)))
             for s in structs:
                 for m in s[:learner_count]:
@@ -206,37 +240,42 @@ def load_models_info(root_dir, regularizer_index, learner_count):
                                 #adj[v2,v1] = adj[v2,v1] + 1
 
 
-        from scipy.stats import gaussian_kde
-        import matplotlib.pyplot as plt
-        density = gaussian_kde(adj[adj != 0])
-        xs = np.linspace(0, max(adj[adj != 0]), 200)
-        #density.covariance_factor = lambda : .25
-        #density._compute_covariance()
-        plt.plot(xs, density(xs))
-        plt.show()
+            density = gaussian_kde(adj[adj != 0])
+            xs = np.linspace(0, max(adj[adj != 0]), 200)
+            #density.covariance_factor = lambda : .25
+            #density._compute_covariance()
+            plt.figure()
+            plt.plot(xs, density(xs))
+            #plt.show()
+            plt.savefig('tmp/density-%s-%s-%d.png' %
+                        (data, target, regularizer_index // 2), dpi=100)
+            plt.close()
 
 
                                 
-        for b in range(10):
             tmp_g = gt.Graph(directed = False)
+            has_edge = dict()
             tmp_g.add_vertex(len(nodes))
             edge_weights = tmp_g.new_edge_property('double')
             for i in range(len(nodes)):
                 for j in range(len(nodes)):
                     if i > j and adj[i,j] > 30:
+                        has_edge[i] = True
+                        has_edge[j] = True
                         e = tmp_g.add_edge(i, j)
                         edge_weights[e] = 1 + 1/adj[i,j]
 
-            gt.draw.graphviz_draw(tmp_g, layout='twopi',
-                          size=(25,15),
+            gt.draw.graphviz_draw(tmp_g, layout='sfdp',
+                          size=(18.5,10.5),
                           #vcolor=vcolor,
                           #vcmap=plt.get_cmap('Blues'),
                           #vprops = {'label': vxlabel,
                           #          'shape': vshape,
                           #          'height': vheight,
                           #          'width': vwidth},
-                          eprops = {'len': edge_weights})
-            input()
+                          eprops = {'len': edge_weights},
+                          output = 'tmp/summary-%s-%s-%02d.png' %
+                          (data, target, regularizer_index // 2))
 
 if __name__ == '__main__':
     root_dir = ''
@@ -246,7 +285,7 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_6/"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_7/"
 
     all_scores = get_scores(root_dir)
 
@@ -254,6 +293,41 @@ if __name__ == '__main__':
 
     draw_plots(all_scores)
     
-    draw_plot(all_scores, 'vantveer-prognosis')
-    # stabilize results ( multiple runs )
-    # make the plots
+    draw_plot(all_scores, 'vantveer-prognosis', ('regularizer_index', 4))
+
+    '''
+    at the moment there are 9 dataset/problems, plot them in
+    3x3 subplots
+    '''
+    regularizer_indices = [2, 4, 6, 8, 10, 12, 14, 16, 18]
+    for ri in regularizer_indices[5:]:
+        f, axarr = plt.subplots(3, 3, sharey = False)
+        draw_plot(all_scores, 'TCGA-BRCA-T',
+            ('regularizer_index', ri), axarr[0, 0])
+        draw_plot(all_scores, 'TCGA-BRCA-N',
+            ('regularizer_index', ri), axarr[0, 1])
+        draw_plot(all_scores, 'TCGA-BRCA-ER',
+            ('regularizer_index', ri), axarr[0, 2])
+        draw_plot(all_scores, 'TCGA-BRCA-stage',
+            ('regularizer_index', ri), axarr[1, 0])
+        draw_plot(all_scores, 'TCGA-LAML-GeneExpression-risk_group',
+            ('regularizer_index', ri), axarr[1, 1])
+        draw_plot(all_scores, 'TCGA-LAML-GeneExpression-vital_status',
+            ('regularizer_index', ri), axarr[1, 2])
+        draw_plot(all_scores, 'TCGA-LAML-risk_group',
+            ('regularizer_index', ri), axarr[2, 1])
+        draw_plot(all_scores, 'TCGA-LAML-vital_status',
+            ('regularizer_index', ri), axarr[2, 2])
+        draw_plot(all_scores, 'vantveer-prognosis',
+            ('regularizer_index', ri), axarr[2, 0])
+
+        fig = plt.gcf()
+        fig.set_size_inches(18.5,10.5)
+        plt.tight_layout(pad=2)
+        plt.savefig('tmp/performance-%02d.png' % (ri // 2), dpi=100)
+        plt.close()
+        #plt.show()
+
+        learner_count = 4
+        
+        load_models_info(root_dir, ri, learner_count)

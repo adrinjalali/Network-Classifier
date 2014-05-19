@@ -271,7 +271,7 @@ def plot_features_on_graph(rat, g, test_sample):
     
         
 # feature extraction stuff
-working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_5/TCGA-LAML/risk_group/'
+working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_7/TCGA-LAML/risk_group/'
 #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-BRCA/N/'
 method = 'ratboost_linear_svc'
 cv_index = 70
@@ -296,9 +296,9 @@ cvs = tmp
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
-a = Rat(learner_count = 5,
+a = Rat(learner_count = 4,
         learner_type = 'linear svc',
-        regularizer_index = 7,
+        regularizer_index = 6,
         n_jobs = 15)
 #a.fit(tmpX[:60,], y[:60])
 train, test = cvs[0]

@@ -202,7 +202,16 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def fit(self, X, y):
         self._X_colcount = X.shape[1]
         #self.learner.fit(self._transform(X), y)
-        self.get_learner(X, y)
+        learner = self.get_learner(X, y)
+        if (not hasattr(learner, 'predict_proba')) and \
+            hasattr(learner, 'decision_function'):
+            decision_values = learner.decision_function(self._transform(X))
+            if (decision_values.ndim > 1):
+                raise("don't know what to do")
+            self.df_var = np.var(decision_values)
+            self.df_mean = np.mean(decision_values)
+            print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean))
+            
         classifier_features = self.getClassifierFeatures()
 
         fe = SecondLayerFeatureEvaluator()
@@ -262,8 +271,10 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
                 res.append((result / weight_sum) * \
                        my_score(np.max(self.predict_proba(X[[i],]))))
             else:
+                decision_value_normalized = \
+                  (self.decision_function(X[[i],]) - self.df_mean) / self.df_var
                 res.append((result / weight_sum) \
-                           * my_score(self.decision_function(X[[i],])))
+                           * my_score(decision_value_normalized))
         return(np.array(res).reshape(-1))
         
     def getAllFeatures(self):

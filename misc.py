@@ -25,7 +25,7 @@ from collections import defaultdict
 import time
 from joblib import Parallel, delayed, logger
 import pickle
-
+import re
 
 from constants import *;
 from rat import *
@@ -73,6 +73,8 @@ def get_max_score(scores, prefix = ''):
                np.std(scores))
         
 def print_scores(scores, prefix = ''):
+    if (len(scores) == 0):
+        return
     report_max = ['N', 'learner_type']
     ignore_params = ['learner_type']
     if isinstance(scores, dict):

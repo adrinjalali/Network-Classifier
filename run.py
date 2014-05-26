@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
         machine = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
                                                               max_depth = 2,
-                                                              n_estimators = 200)
+                                                              n_estimators = 100)
         scores = cv.cross_val_score(
             machine, tmpX, y,
             cv = cvs,
@@ -162,7 +162,7 @@ if __name__ == '__main__':
             verbose=1)
         this_method = 'Gradient Boosting Classifier'
         all_scores[this_method] = dict()
-        all_scores[this_method][('N', 200)] = scores
+        all_scores[this_method][('N', 100)] = scores
 
         machine = sklearn.ensemble.AdaBoostClassifier(
             sklearn.tree.DecisionTreeClassifier(max_depth=2),

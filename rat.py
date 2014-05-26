@@ -272,7 +272,8 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
                        my_score(np.max(self.predict_proba(X[[i],]))))
             else:
                 decision_value_normalized = \
-                  (self.decision_function(X[[i],]) - self.df_mean) / self.df_var
+                  (self.decision_function(X[[i],]) - self.df_mean) / \
+                  math.sqrt(self.df_var)
                 res.append((result / weight_sum) \
                            * my_score(decision_value_normalized))
         return(np.array(res).reshape(-1))
@@ -557,29 +558,28 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         return self.classes_[np.argmax(D, axis=1)]
     '''
     def decision_function(self, X, return_details=False):
-        #try:
-            X = X.view(np.ndarray)
+        global predictions, confidences
+        X = X.view(np.ndarray)
 
-            if (X.ndim == 1):
-                X = X.reshape(1,-1)
+        if (X.ndim == 1):
+            X = X.reshape(1,-1)
 
-            predictions = np.empty((X.shape[0],0), dtype=float)
-            confidences = np.empty((X.shape[0],0), dtype=float)
-            for l in self.learners:
-                predictions = np.hstack((predictions,
-                                         l.decision_function(X).reshape(-1,1)))
-                confidences = np.hstack((confidences,
-                                         l.getConfidence(X).reshape(-1,1)))
+        predictions = np.empty((X.shape[0],0), dtype=float)
+        confidences = np.empty((X.shape[0],0), dtype=float)
+        for l in self.learners:
+            predictions = np.hstack((predictions,
+                                     l.predict(X).reshape(-1,1)))
+            confidences = np.hstack((confidences,
+                                     l.getConfidence(X).reshape(-1,1)))
 
-            if (len(self.learners) > 1):
-                #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-                result = np.average(predictions, weights=confidences, axis=1)
-            else:
-                result = predictions
-            if (return_details):
-                return((result, predictions, confidences))
-            else:
-                return(result)
-        #except:
-        #    print("@@@@@@@ :", sys.exc_info(), file=sys.stderr)
+        if (len(self.learners) > 1):
+            #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
+            result = np.mean(predictions * confidences, axis=1)
+            #result = np.average(predictions, weights=confidences, axis=1)
+        else:
+            result = predictions
+        if (return_details):
+            return((result, predictions, confidences))
+        else:
+            return(result)
         

@@ -112,14 +112,16 @@ def plot_graph(hilight_learner, test_sample, color_scheme='gene'):
                                     'height': vheight,
                                     'width': vwidth})
 
-def plot_learners(test_sample):
+# this plots a model with L_%d label for learners, and others as gene names.
+def plot_learners(model, test_sample, feature_annotation,
+                  plot_title = '', output = ''):
     node_shapes = ['box', 'ellipse',
-                   'circle', 'triangle', 'diamond',
+                   'triangle', 'diamond',
                    'trapezium', 'parallelogram',
                    'house', 'pentagon', 'hexagon',
                    'septagon', 'octagon', 'invtriangle']
     
-    tmp_g = gt.Graph(directed = True)
+    tmp_g = gt.Graph(directed = False)
     vertex_map_name2index = dict()
     vertex_map_index2name = dict()
     vcolor = tmp_g.new_vertex_property('double')
@@ -127,13 +129,14 @@ def plot_learners(test_sample):
     vheight = tmp_g.new_vertex_property('string')
     vxlabel = tmp_g.new_vertex_property('string')
     vshape = tmp_g.new_vertex_property('string')
+    vfontcolor = tmp_g.new_vertex_property('string')
 
     l_cdfs = dict()
     v_cdfs = dict()
 
-    for i in range(len(a.learners)):
+    for i in range(len(model.learners)):
         print('========================')
-        print(a.learners[i].getClassifierFeatures())
+        print(model.learners[i].getClassifierFeatures())
 
         cur_vertex, is_new = add_vertex(g = tmp_g,
             vertex_map_name2index = vertex_map_name2index,
@@ -141,13 +144,13 @@ def plot_learners(test_sample):
             name = 'L_%d' % i)
         #vwidth[cur_vertex] = '1.5'
         #vheight[cur_vertex] = '2'
-        l_cdfs[cur_vertex] = a.learners[i].getConfidence(test_sample)
-        print(i, a.learners[i].getConfidence(test_sample))
+        l_cdfs[cur_vertex] = model.learners[i].getConfidence(test_sample)
+        print(i, model.learners[i].getConfidence(test_sample))
         vxlabel[cur_vertex] = 'L_%d' % i
         vshape[cur_vertex] = node_shapes[i]
         target_vertex = cur_vertex
         
-        for gene in a.learners[i].getClassifierFeatures():
+        for gene in model.learners[i].getClassifierFeatures():
             cur_vertex, is_new = add_vertex(g = tmp_g,
                             vertex_map_name2index = vertex_map_name2index,
                             vertex_map_index2name = vertex_map_index2name,
@@ -155,47 +158,50 @@ def plot_learners(test_sample):
 
             #vwidth[cur_vertex] = '1.5'
             #vheight[cur_vertex] = '2'
-            v_cdfs[cur_vertex] = a.learners[i]._FCEs[gene].\
+            v_cdfs[cur_vertex] = model.learners[i]._FCEs[gene].\
               getConfidence(test_sample)[0] * \
-              a.learners[i].getClassifierFeatureWeights()[gene]
-            print(gene, a.learners[i]._FCEs[gene].\
+              model.learners[i].getClassifierFeatureWeights()[gene]
+            print(gene, model.learners[i]._FCEs[gene].\
               getConfidence(test_sample)[0])
             vxlabel[cur_vertex] = feature_annotation[gene]
             vshape[cur_vertex] = node_shapes[i]
 
             tmp_g.add_edge(cur_vertex, target_vertex)
 
-            '''
-            parents = a.learners[i]._FCEs[gene].getFeatures()
-
-            for parent in parents:
-                cur_vertex, is_new = add_vertex(g = tmp_g,
-                           vertex_map_name2index = vertex_map_name2index,
-                           vertex_map_index2name = vertex_map_index2name,
-                           name = parent)
-                tmp_g.add_edge(
-                    vertex_map_name2index[parent],
-                    vertex_map_name2index[gene])
-            '''
     l_minmax = (min(list(l_cdfs.values())),
                 max(list(l_cdfs.values())))
     v_minmax = (min(list(v_cdfs.values())),
                 max(list(v_cdfs.values())))
     for v, c in l_cdfs.items():
         vcolor[v] = (c - l_minmax[0]) / (l_minmax[1] - l_minmax[0])
+        if (c > np.mean(l_minmax)):
+            vfontcolor[v] = 'white'
+        else:
+            vfontcolor[v] = 'black'
     for v, c in v_cdfs.items():
         vcolor[v] = (c - v_minmax[0]) / (v_minmax[1] - v_minmax[0])
-        
-    gt.draw.graphviz_draw(tmp_g, layout='twopi',
+        if (c > np.mean(v_minmax)):
+            vfontcolor[v] = 'white'
+        else:
+            vfontcolor[v] = 'black'
+    '''circo dot fdp neato nop nop1 nop2 osage patchwork sfdp twopi'''
+    gt.draw.graphviz_draw(tmp_g, layout='neato',
                           size=(25,15),
                           vcolor=vcolor,
                           vcmap=plt.get_cmap('Blues'),
                           vprops = {'label': vxlabel,
                                     'shape': vshape,
                                     'height': vheight,
-                                    'width': vwidth})
+                                    'width': vwidth,
+                                    'fontcolor': vfontcolor},
+                          gprops = {'labelloc':'t',
+                                    'fontsize':36,
+                                    'label':plot_title},
+                          output = output)
 
-def plot_features_on_graph(rat, g, test_sample):
+def plot_test_features_on_graph(rat, g, test_sample,
+                                feature_annotation, plot_title = '',
+                                output = ''):
     node_shapes = ['box', 'ellipse',
                    'triangle', 'diamond',
                    'trapezium', 'parallelogram',
@@ -208,9 +214,12 @@ def plot_features_on_graph(rat, g, test_sample):
     vshape = tmp_g.new_vertex_property('string')
     vpenwidth = tmp_g.new_vertex_property('double')
     included = tmp_g.new_vertex_property('bool')
+    edge_included = tmp_g.new_edge_property('bool')
     is_feature = dict()
     vscore = dict()
     lvscore = dict()
+
+    vertex_list = list()
 
     for l_idx, l in zip(range(len(rat.learners)), rat.learners):
         for i in l.getClassifierFeatures():
@@ -220,17 +229,25 @@ def plot_features_on_graph(rat, g, test_sample):
             is_feature[tmp_g.vertex(i)] = True
             lvscore[tmp_g.vertex(i)] = \
               l.getConfidence(test_sample).reshape(-1)[0]
-            for j in l.getClassifierFeatures():
-                path = gt.topology.shortest_path(g,
-                                                 g.vertex(i),
-                                                 g.vertex(j))[0]
-                for v in path:
+            vertex_list.append(i)
+
+    for vi in vertex_list:
+        for vj in vertex_list:
+            if (vi < vj):
+                path_v, path_e = gt.topology.shortest_path(g,
+                                                 g.vertex(vi),
+                                                 g.vertex(vj))
+                #print('------')
+                for v in path_v:
                     included[v] = True
                     vxlabel[v] = feature_annotation[int(v)]
+                    #print(feature_annotation[int(v)])
                     if (not v in is_feature):
                         vcolor[v] = 'white'
                         vshape[v] = 'circle'
                         vpenwidth[v] = 1
+                for e in path_e:
+                    edge_included[e] = True
 
     vcmap = mpl.cm.summer
     v_minmax = (min(list(vscore.values())),
@@ -247,6 +264,7 @@ def plot_features_on_graph(rat, g, test_sample):
         vpenwidth[v] = 1 + lvnorm(s) * 5
 
     tmp_g.set_vertex_filter(included)
+    #tmp_g.set_edge_filter(edge_included)
     tmp_g.set_edge_filter(gt.topology.min_spanning_tree(tmp_g))
 
     while (True):
@@ -261,57 +279,205 @@ def plot_features_on_graph(rat, g, test_sample):
         tmp_g.set_vertex_filter(included)
         if (not flag):
             break
-        
+
     gt.draw.graphviz_draw(tmp_g, layout = 'twopi',
                           vcolor=vcolor,
+                          size=(25,15),
                           vprops = {'label': vxlabel,
                                     'width': 1,
                                     'shape': vshape,
-                                    'penwidth': vpenwidth})
+                                    'penwidth': vpenwidth},
+                          gprops = {'labelloc':'t',
+                                    'fontsize': 36,
+                                    'label':plot_title},
+                          output = output)
+
+def plot_features_on_graph(g, feature_list,
+                           feature_confidence,
+                           feature_annotation, plot_title = '',
+                           output = ''):
+    node_shapes = ['box', 'ellipse',
+                   'triangle', 'diamond',
+                   'trapezium', 'parallelogram',
+                   'house', 'pentagon', 'hexagon',
+                   'septagon', 'octagon', 'invtriangle']
+
+    tmp_g = g.copy()
+    vxlabel = tmp_g.new_vertex_property('string')
+    vcolor = tmp_g.new_vertex_property('string')
+    vshape = tmp_g.new_vertex_property('string')
+    vpenwidth = tmp_g.new_vertex_property('double')
+    included = tmp_g.new_vertex_property('bool')
+    edge_included = tmp_g.new_edge_property('bool')
+    is_feature = dict()
+    vscore = dict()
+    lvscore = dict()
+
+    for vi in feature_list:
+        #included[g.vertex(vi)] = True
+        #vxlabel[g.vertex(vi)] = feature_annotation[int(vi)]
+        #vcolor[g.vertex(vi)] = 'blue'
+        for vj in feature_list:
+            if (vi < vj):
+                path_v, path_e = gt.topology.shortest_path(tmp_g,
+                                                 tmp_g.vertex(vi),
+                                                 tmp_g.vertex(vj))
+                #print('------', feature_annotation[vi], feature_annotation[vj])
+                for v in path_v:
+                    included[v] = True
+                    vxlabel[v] = feature_annotation[int(v)]
+                    #print(feature_annotation[int(v)])
+                    if (not v in is_feature):
+                        vcolor[v] = 'white'
+                        vshape[v] = 'circle'
+                        vpenwidth[v] = 1
+                for e in path_e:
+                    edge_included[e] = True
+
+    for vi in feature_list:
+        vcolor[tmp_g.vertex(vi)] = 'blue'
+        is_feature[tmp_g.vertex(vi)] = True
+
+
+    vcmap = mpl.cm.summer
+    v_minmax = (min(list(feature_confidence.values())),
+                max(list(feature_confidence.values())))
+    vnorm = mpl.colors.Normalize(vmin=v_minmax[0], vmax=v_minmax[1])
+    for v, s in feature_confidence.items():
+        color = tuple([int(c * 255.0) for c in vcmap(vnorm(s))])
+        vcolor[tmp_g.vertex(v)] = "#%.2x%.2x%.2x%.2x" % color
+
+    '''
+    lv_minmax = (min(list(lvscore.values())),
+                 max(list(lvscore.values())))
+    lvnorm = mpl.colors.Normalize(vmin=lv_minmax[0], vmax=lv_minmax[1])
+    for v, s in lvscore.items():
+        vpenwidth[v] = 1 + lvnorm(s) * 5
+    '''
+    tmp_g.set_vertex_filter(included)
+    #tmp_g.set_edge_filter(edge_included)
+    tmp_g.set_edge_filter(gt.topology.min_spanning_tree(tmp_g))
+
+    while (True):
+        flag = False
+        tmp_g2 = gt.GraphView(tmp_g, vfilt = included)
+        for v in tmp_g2.vertices():
+            if (v.in_degree() == 1 or v.out_degree() == 1):
+                if (not tmp_g.vertex(int(v)) in is_feature):
+                    included[tmp_g.vertex(int(v))] = False
+                    flag = True
+
+        tmp_g.set_vertex_filter(included)
+        if (not flag):
+            break
+
+    gt.draw.graphviz_draw(tmp_g, layout = 'twopi',
+                          vcolor=vcolor,
+                          size=(25,15),
+                          vprops = {'label': vxlabel,
+                                    'width': 1,
+                          #          'shape': vshape,
+                                    'penwidth': vpenwidth},
+                          gprops = {'labelloc':'t',
+                                    'fontsize': 36,
+                                    'labelfontname': 'arial',
+                                    'label':plot_title},
+                          output = output)
+
+def get_feature_annotation(root_dir, data, target):    
+    working_dir = '%s/%s/%s/' % (root_dir, data, target)
+
+    data_file = np.load(working_dir + '/npdata.npz')
+    return(data_file['feature_annotation'])
+
+def generate_graph_plots(root_dir, data, target, learner_count,
+                         regularizer_index,
+                         feature_list,
+                         node_confidence,
+                         cv_index,
+                         threshold,
+                         plot_titles = True):
     
-        
-# feature extraction stuff
-working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_7/TCGA-LAML/risk_group/'
-#working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-BRCA/N/'
-method = 'ratboost_linear_svc'
-cv_index = 70
-#cv_index = 20
-print(working_dir, method, cv_index, file=sys.stderr)
-print("loading data...", file=sys.stderr)
+            
+    # feature extraction stuff
+    working_dir = '%s/%s/%s/' % (root_dir, data, target)
+    method = 'ratboost_linear_svc'
+    #cv_index = 25
 
-data_file = np.load(working_dir + '/npdata.npz')
-tmpX = data_file['tmpX']
-X_prime = data_file['X_prime']
-y = data_file['y']
-sample_annotation = data_file['sample_annotation']
-feature_annotation = data_file['feature_annotation']
-g = gt.load_graph(working_dir + '/graph.xml.gz')
-cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
+    print(working_dir, method, cv_index, file=sys.stderr)
+    print("loading data...", file=sys.stderr)
 
-#choosing only one cross-validation fold
-tmp = list()
-tmp.append((cvs[cv_index]))
-cvs = tmp
+    data_file = np.load(working_dir + '/npdata.npz')
+    tmpX = data_file['tmpX']
+    X_prime = data_file['X_prime']
+    y = data_file['y']
+    sample_annotation = data_file['sample_annotation']
+    feature_annotation = data_file['feature_annotation']
+    g = gt.load_graph(working_dir + '/graph.xml.gz')
+    cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
 
-with open("./rat.py") as f:
-    code = compile(f.read(), "rat.py", 'exec')
-    exec(code)
-a = Rat(learner_count = 4,
+    #choosing only one cross-validation fold
+    tmp = list()
+    tmp.append((cvs[cv_index]))
+    cvs = tmp
+
+    #with open("./rat.py") as f:
+    #    code = compile(f.read(), "rat.py", 'exec')
+    #    exec(code)
+    a = Rat(learner_count = learner_count,
         learner_type = 'linear svc',
-        regularizer_index = 6,
-        n_jobs = 15)
-#a.fit(tmpX[:60,], y[:60])
-train, test = cvs[0]
-a.fit(tmpX[train,], y[train])
+        regularizer_index = regularizer_index,
+        n_jobs = 1)
 
-plot_graph(hilight_learner = 4, test_sample=tmpX[[0],:],
-           color_scheme = 'learner')
+    train, test = cvs[0]
+    a.fit(tmpX[train,], y[train])
 
-plot_learners(test_sample=tmpX[[test[30]],:])
+    # I'm not interested in this plot I guess.
+    #plot_graph(hilight_learner = 4, test_sample=tmpX[[0],:],
+    #       color_scheme = 'learner')
 
-plot_features_on_graph(a, g, tmpX[[test[5]],])
+    if (plot_titles):
+        plot_learners(a, tmpX[[test[5]],:], feature_annotation,
+                           plot_title = 'Test Sample Model: %s %s' % \
+                           (data, target),
+                           output = 'tmp/testdata-model-%s-%s-%d.eps' % \
+                           (data, target, regularizer_index))
+    else:
+        plot_learners(a, tmpX[[test[5]],:], feature_annotation,
+                           plot_title = '',
+                           output = 'tmp/testdata-model-%s-%s-%d.eps' % \
+                           (data, target, regularizer_index))
 
 
+    if (plot_titles):
+        plot_test_features_on_graph(a, g, tmpX[[test[5]],],
+                                feature_annotation,
+                                plot_title = 'Test Sample Features: %s %s' % \
+                                (data, target),
+                                output = 'tmp/testdata-features-PPI-%s-%s-%d.eps' \
+                                % (data, target, regularizer_index))
+    else:
+        plot_test_features_on_graph(a, g, tmpX[[test[5]],],
+                                feature_annotation,
+                                plot_title = '',
+                                output = 'tmp/testdata-features-PPI-%s-%s-%d.eps' \
+                                % (data, target, regularizer_index))
+
+    if (plot_titles):
+        plot_features_on_graph(g, feature_list, node_confidence,
+                           feature_annotation,
+                           plot_title = 'High Confidence Features Over PPI: %s %s (%g)' % \
+                           (data, target, threshold),
+                           output = 'tmp/features-PPI-%s-%s-%d.eps' % \
+                           (data, target, regularizer_index))
+    else:
+        plot_features_on_graph(g, feature_list, node_confidence,
+                           feature_annotation,
+                           plot_title = '',
+                           output = 'tmp/features-PPI-%s-%s-%d.eps' % \
+                           (data, target, regularizer_index))
+
+'''
 scores = cv.cross_val_score(
     a, tmpX, y,
     cv=5,
@@ -352,3 +518,4 @@ while (index < len(cs)):
 return(self.learner)
 
 sklearn.metrics.roc_auc_score(y[train], a.decision_function(tmpX[train,]))
+'''

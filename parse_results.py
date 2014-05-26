@@ -1,4 +1,5 @@
 import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
@@ -6,10 +7,13 @@ import sys
 import os
 import re
 import glob
+from joblib import Parallel, delayed, logger
 
 from itertools import chain
 from scipy.stats import gaussian_kde
 
+from plot_ratboost import generate_graph_plots
+from plot_ratboost import get_feature_annotation
 from misc import *
 
 dataset_resolve = {'vantveer-prognosis': "Vant' Veer - Prognosis",
@@ -115,11 +119,15 @@ def flatten_scores_dict(scores, filters = None):
     res = list()
     labels = list()
     for key in sorted(scores.keys()):
+        #print(key)
         if ignore_key(key, filters):
             continue
         value = scores[key]
         if isinstance(value, dict):
             _scores, _labels = flatten_scores_dict(value, filters)
+            #print(_labels)
+            #print(labels)
+            #print('$$$$$$$')
             for label in _labels:
                 labels.append(add_text(label, key))
             for s in _scores:
@@ -129,13 +137,14 @@ def flatten_scores_dict(scores, filters = None):
             labels.append(add_text('', key))
     return(res, labels)
 
-def draw_plot(all_scores, problem, filters = None, plt_ax = None):
+def draw_plot(all_scores, problem, filters = None, plt_ax = None, verbose=True):
     colors = ['b', 'g', 'y', 'k', 'c', 'r', 'm', '0.5', '0.9']
     index = 0
     plot_colors = []
     plot_texts = []
     tmp = list()
-    print_scores(all_scores[problem])
+    if (verbose):
+        print_scores(all_scores[problem])
     for method in methods_order:
         if not method in all_scores[problem]:
             continue
@@ -147,6 +156,7 @@ def draw_plot(all_scores, problem, filters = None, plt_ax = None):
             plot_texts.append(t)
 
             plot_colors.append(colors[index])
+            #print(plot_colors)
         index += 1
 
     if (plt_ax is None):
@@ -193,16 +203,27 @@ def draw_plots(all_scores):
         draw_plot(all_scores, problem)
 
 
-def load_models_info(root_dir, regularizer_index, learner_count):
-    datas = os.listdir(root_dir)
-    datas = [name for name in datas if os.path.isdir(
-        root_dir + '/' + name)]
+def load_models_info(root_dir, regularizer_index, learner_count,
+                     data = None,
+                     target = None):
 
-    
+    if (data is None):
+        datas = os.listdir(root_dir)
+        datas = [name for name in datas if os.path.isdir(
+            root_dir + '/' + name)]
+    elif isinstance(data, list):
+        datas = data
+    else:
+        datas = list([data])
 
     for data in datas:
         print(data)
-        targets = os.listdir(root_dir + '/' + data)
+        if (target is None):
+            targets = os.listdir(root_dir + '/' + data)
+        elif isinstance(target, list):
+            targets = target
+        else:
+            targets = list([target])
 
         for target in targets:
             print(target)
@@ -228,10 +249,15 @@ def load_models_info(root_dir, regularizer_index, learner_count):
                 vertex_map_name2index[nodes[i]] = i
                 vertex_map_index2name[i] = nodes[i]
 
+            node_confidence = dict()
             adj = np.zeros(shape=(len(nodes), len(nodes)))
             for s in structs:
                 for m in s[:learner_count]:
                     for i in m:
+                        if (i in node_confidence):
+                            node_confidence[i] += 1
+                        else:
+                            node_confidence[i] = 1
                         for j in m:
                             if i != j:
                                 v1 = nodes.index(i)
@@ -239,43 +265,98 @@ def load_models_info(root_dir, regularizer_index, learner_count):
                                 adj[v1,v2] = adj[v1,v2] + 1
                                 #adj[v2,v1] = adj[v2,v1] + 1
 
-
             density = gaussian_kde(adj[adj != 0])
             xs = np.linspace(0, max(adj[adj != 0]), 200)
             #density.covariance_factor = lambda : .25
             #density._compute_covariance()
+
+
+            #find threshold for top X% of area under the density curve
+            low = -1e3
+            high = 1e3
+            target_top = 0.1
+            while(True):
+                mid = (low + high) / 2
+                mid_v = density.integrate_box_1d(mid, 1e4)
+                print(mid, mid_v)
+                if (abs(mid_v - target_top) < 1e-2):
+                    break
+                if (mid_v > target_top):
+                    low = mid
+                elif (mid_v < target_top):
+                    high = mid
+
             plt.figure()
             plt.plot(xs, density(xs))
+            plt.axvline(mid, c='g')
             #plt.show()
-            plt.savefig('tmp/density-%s-%s-%d.png' %
+            plt.savefig('tmp/density-%s-%s-%d.eps' %
                         (data, target, regularizer_index // 2), dpi=100)
             plt.close()
 
-
-                                
+            threshold = mid
+            
             tmp_g = gt.Graph(directed = False)
+
             has_edge = dict()
             tmp_g.add_vertex(len(nodes))
+            
+            node_confidence_vprop = tmp_g.new_vertex_property('double')
+            for key, value in node_confidence.items():
+                node_confidence_vprop[tmp_g.vertex(nodes.index(key))] = value
+                
             edge_weights = tmp_g.new_edge_property('double')
             for i in range(len(nodes)):
                 for j in range(len(nodes)):
-                    if i > j and adj[i,j] > 30:
+                    if i > j and adj[i,j] > threshold:
                         has_edge[i] = True
                         has_edge[j] = True
                         e = tmp_g.add_edge(i, j)
                         edge_weights[e] = 1 + 1/adj[i,j]
 
-            gt.draw.graphviz_draw(tmp_g, layout='sfdp',
+            feature_annotation = get_feature_annotation(root_dir, data, target)
+            vlabel = tmp_g.new_vertex_property('string')
+            vfontcolor = tmp_g.new_vertex_property('string')
+            feature_list = list()
+            for v in tmp_g.vertices():
+                if (v.in_degree() > 0 or v.out_degree() > 0 or
+                    node_confidence[vertex_map_index2name[int(v)]] > threshold):
+                    vlabel[v] = feature_annotation[vertex_map_index2name[int(v)]]
+                    feature_list.append(vertex_map_index2name[int(v)])
+                    if (node_confidence[vertex_map_index2name[int(v)]] >
+                        np.mean((max(node_confidence.values()),
+                                 min(node_confidence.values())))):
+                        vfontcolor[v] = 'white'
+                    else:
+                        vfontcolor[v] = 'black'
+
+            gt.draw.graphviz_draw(tmp_g, layout='neato',
                           size=(18.5,10.5),
-                          #vcolor=vcolor,
-                          #vcmap=plt.get_cmap('Blues'),
-                          #vprops = {'label': vxlabel,
-                          #          'shape': vshape,
-                          #          'height': vheight,
-                          #          'width': vwidth},
+                          vcolor=node_confidence_vprop,
+                          vcmap=plt.get_cmap('Blues'),
+                          vprops = {'label': vlabel,
+                                    'shape': 'ellipse',
+                                    'vpenwidth': 1,
+                                    'fontcolor': vfontcolor},
                           eprops = {'len': edge_weights},
-                          output = 'tmp/summary-%s-%s-%02d.png' %
+                          #gprops = {'labelloc':'t',
+                          #          'label':'High Confidence Features: %s %s (%g)' % \
+                          #          (data, target, threshold)},
+                          output = 'tmp/summary-%s-%s-%02d.eps' %
                           (data, target, regularizer_index // 2))
+
+            #if (data == 'TCGA-BRCA'):
+            #    continue
+
+
+            generate_graph_plots(root_dir, data, target, learner_count,
+                         regularizer_index,
+                         feature_list,
+                         node_confidence,
+                         cv_index = 35,
+                         threshold = threshold,
+                         plot_titles = False)
+
 
 if __name__ == '__main__':
     root_dir = ''
@@ -289,44 +370,71 @@ if __name__ == '__main__':
 
     all_scores = get_scores(root_dir)
 
-    print_scores(all_scores)
+    #print_scores(all_scores)
 
-    draw_plots(all_scores)
+    #draw_plots(all_scores)
     
-    draw_plot(all_scores, 'vantveer-prognosis', ('regularizer_index', 4))
+    #draw_plot(all_scores, 'vantveer-prognosis', ('regularizer_index', 4))
 
     '''
     at the moment there are 9 dataset/problems, plot them in
     3x3 subplots
     '''
     regularizer_indices = [2, 4, 6, 8, 10, 12, 14, 16, 18]
-    for ri in regularizer_indices[5:]:
+    for ri in regularizer_indices:
+        print(ri)
         f, axarr = plt.subplots(3, 3, sharey = False)
         draw_plot(all_scores, 'TCGA-BRCA-T',
-            ('regularizer_index', ri), axarr[0, 0])
+            ('regularizer_index', ri), axarr[0, 0], False)
         draw_plot(all_scores, 'TCGA-BRCA-N',
-            ('regularizer_index', ri), axarr[0, 1])
+            ('regularizer_index', ri), axarr[0, 1], False)
         draw_plot(all_scores, 'TCGA-BRCA-ER',
-            ('regularizer_index', ri), axarr[0, 2])
+            ('regularizer_index', ri), axarr[0, 2], False)
         draw_plot(all_scores, 'TCGA-BRCA-stage',
-            ('regularizer_index', ri), axarr[1, 0])
+            ('regularizer_index', ri), axarr[1, 0], False)
         draw_plot(all_scores, 'TCGA-LAML-GeneExpression-risk_group',
-            ('regularizer_index', ri), axarr[1, 1])
+            ('regularizer_index', ri), axarr[1, 1], False)
         draw_plot(all_scores, 'TCGA-LAML-GeneExpression-vital_status',
-            ('regularizer_index', ri), axarr[1, 2])
+            ('regularizer_index', ri), axarr[1, 2], False)
         draw_plot(all_scores, 'TCGA-LAML-risk_group',
-            ('regularizer_index', ri), axarr[2, 1])
+            ('regularizer_index', ri), axarr[2, 1], False)
         draw_plot(all_scores, 'TCGA-LAML-vital_status',
-            ('regularizer_index', ri), axarr[2, 2])
+            ('regularizer_index', ri), axarr[2, 2], False)
         draw_plot(all_scores, 'vantveer-prognosis',
-            ('regularizer_index', ri), axarr[2, 0])
+            ('regularizer_index', ri), axarr[2, 0], False)
 
         fig = plt.gcf()
         fig.set_size_inches(18.5,10.5)
         plt.tight_layout(pad=2)
-        plt.savefig('tmp/performance-%02d.png' % (ri // 2), dpi=100)
+        plt.savefig('tmp/performance-notaligned-%02d.eps' % (ri // 2), dpi=100)
         plt.close()
         #plt.show()
+
+        f, axarr = plt.subplots(3, 3, sharey = True)
+        draw_plot(all_scores, 'TCGA-BRCA-T',
+            ('regularizer_index', ri), axarr[0, 0], False)
+        draw_plot(all_scores, 'TCGA-BRCA-N',
+            ('regularizer_index', ri), axarr[0, 1], False)
+        draw_plot(all_scores, 'TCGA-BRCA-ER',
+            ('regularizer_index', ri), axarr[0, 2], False)
+        draw_plot(all_scores, 'TCGA-BRCA-stage',
+            ('regularizer_index', ri), axarr[1, 0], False)
+        draw_plot(all_scores, 'TCGA-LAML-GeneExpression-risk_group',
+            ('regularizer_index', ri), axarr[1, 1], False)
+        draw_plot(all_scores, 'TCGA-LAML-GeneExpression-vital_status',
+            ('regularizer_index', ri), axarr[1, 2], False)
+        draw_plot(all_scores, 'TCGA-LAML-risk_group',
+            ('regularizer_index', ri), axarr[2, 1], False)
+        draw_plot(all_scores, 'TCGA-LAML-vital_status',
+            ('regularizer_index', ri), axarr[2, 2], False)
+        draw_plot(all_scores, 'vantveer-prognosis',
+            ('regularizer_index', ri), axarr[2, 0], False)
+
+        fig = plt.gcf()
+        fig.set_size_inches(18.5,10.5)
+        plt.tight_layout(pad=2)
+        plt.savefig('tmp/performance-aligned-%02d.eps' % (ri // 2), dpi=100)
+        plt.close()
 
         learner_count = 4
         

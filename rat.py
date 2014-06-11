@@ -574,8 +574,8 @@ class Rat(BaseEstimator, LinearClassifierMixin):
 
         if (len(self.learners) > 1):
             #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
-            result = np.mean(predictions * confidences, axis=1)
-            #result = np.average(predictions, weights=confidences, axis=1)
+            #result = np.mean(predictions * confidences, axis=1)
+            result = np.average(predictions, weights=confidences, axis=1)
         else:
             result = predictions
         if (return_details):

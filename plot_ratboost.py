@@ -104,7 +104,7 @@ def plot_graph(hilight_learner, test_sample, color_scheme='gene'):
             #                  for idx in parents]
             #print(shortest_dists)
     gt.draw.graphviz_draw(tmp_g, layout='dot',
-                          size=(25,15),
+                          size=(25,25),
                           vcolor=vcolor,
                           vcmap=plt.get_cmap('Blues'),
                           vprops = {'label': vxlabel,
@@ -186,7 +186,7 @@ def plot_learners(model, test_sample, feature_annotation,
             vfontcolor[v] = 'black'
     '''circo dot fdp neato nop nop1 nop2 osage patchwork sfdp twopi'''
     gt.draw.graphviz_draw(tmp_g, layout='neato',
-                          size=(25,15),
+                          size=(25,25),
                           vcolor=vcolor,
                           vcmap=plt.get_cmap('Blues'),
                           vprops = {'label': vxlabel,
@@ -280,13 +280,14 @@ def plot_test_features_on_graph(rat, g, test_sample,
         if (not flag):
             break
 
-    gt.draw.graphviz_draw(tmp_g, layout = 'twopi',
+    gt.draw.graphviz_draw(tmp_g, layout = 'neato',
                           vcolor=vcolor,
-                          size=(25,15),
+                          size=(25,25),
                           vprops = {'label': vxlabel,
                                     'width': 1,
                                     'shape': vshape,
-                                    'penwidth': vpenwidth},
+                                    'penwidth': vpenwidth,
+                                    'fontsize': 20},
                           gprops = {'labelloc':'t',
                                     'fontsize': 36,
                                     'label':plot_title},
@@ -373,7 +374,7 @@ def plot_features_on_graph(g, feature_list,
 
     gt.draw.graphviz_draw(tmp_g, layout = 'twopi',
                           vcolor=vcolor,
-                          size=(25,15),
+                          size=(25,25),
                           vprops = {'label': vxlabel,
                                     'width': 1,
                           #          'shape': vshape,

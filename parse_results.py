@@ -16,17 +16,17 @@ from plot_ratboost import generate_graph_plots
 from plot_ratboost import get_feature_annotation
 from misc import *
 
-dataset_resolve = {'vantveer-prognosis': "Vant' Veer - Prognosis",
-                   'TCGA-LAML-vital_status': 'TCGA-LAML - Vital Status',
-                   'TCGA-LAML-risk_group': 'TCGA-LAML - Risk Group',
+dataset_resolve = {'vantveer-prognosis': "Van 't Veer - Prognosis",
+                   'TCGA-LAML-vital_status': 'TCGA-LAML-Methylation - Vital Status',
+                   'TCGA-LAML-risk_group': 'TCGA-LAML-Methylation - Risk Group',
                    'TCGA-BRCA-ER': 'TCGA-BRCA - Estrogen Receptor',
                    'TCGA-BRCA-N': 'TCGA-BRCA - Lymph Node Status',
                    'TCGA-BRCA-T': 'TCGA-BRCA - Tumor Size',
                    'TCGA-BRCA-stage': 'TCGA-BRCA - Cancer Stage',
                    'TCGA-LAML-GeneExpression-risk_group':
-                   'TCGA-LAML - Risk Group - Gene Expression',
+                   'TCGA-LAML - Gene Expression - Risk Group',
                    'TCGA-LAML-GeneExpression-vital_status':
-                   'TCGA-LAML - Vital Status - Gene Expression',
+                   'TCGA-LAML - Gene Expression - Vital Status',
                    }
 methods_order = ['SVM, linear kernel',
                  'SVM, RBF kernel',
@@ -162,6 +162,7 @@ def draw_plot(all_scores, problem, filters = None, plt_ax = None, verbose=True):
     if (plt_ax is None):
         fig, ax = plt.subplots()
     else:
+        #ax = plt.subplot(211)
         ax = plt_ax
     pl = ax.boxplot(tmp, True)
     last_color = None
@@ -177,9 +178,10 @@ def draw_plot(all_scores, problem, filters = None, plt_ax = None, verbose=True):
             idx += 1
         last_color = plot_colors[i]
     #lgnd = plt.legend(objs, nms, fancybox=True)
+    #lgnd = plt.legend(objs, nms, bbox_to_anchor=(1.05,1),loc=2,borderaxespad=0.)
     lgnd = plt.legend(objs, nms, bbox_to_anchor=[-1.6, -2.1, 2, 2],
-                      loc='upper center',
-              ncol=3,
+                      loc='lower center',
+              ncol=2,
               mode="expand",
               borderaxespad=0.,
               fancybox=True
@@ -279,7 +281,7 @@ def load_models_info(root_dir, regularizer_index, learner_count,
                 mid = (low + high) / 2
                 mid_v = density.integrate_box_1d(mid, 1e4)
                 print(mid, mid_v)
-                if (abs(mid_v - target_top) < 1e-2):
+                if (abs(mid_v - target_top) < 1e-3):
                     break
                 if (mid_v > target_top):
                     low = mid
@@ -287,7 +289,10 @@ def load_models_info(root_dir, regularizer_index, learner_count,
                     high = mid
 
             plt.figure()
+            fig = plt.gcf()
+            fig.set_size_inches(7,7)
             plt.plot(xs, density(xs))
+            plt.xlim([0,100])
             plt.axvline(mid, c='g')
             #plt.show()
             plt.savefig('tmp/density-%s-%s-%d.eps' %
@@ -331,7 +336,7 @@ def load_models_info(root_dir, regularizer_index, learner_count,
                         vfontcolor[v] = 'black'
 
             gt.draw.graphviz_draw(tmp_g, layout='neato',
-                          size=(18.5,10.5),
+                          size=(25,25),
                           vcolor=node_confidence_vprop,
                           vcmap=plt.get_cmap('Blues'),
                           vprops = {'label': vlabel,
@@ -431,6 +436,7 @@ if __name__ == '__main__':
             ('regularizer_index', ri), axarr[2, 0], False)
 
         fig = plt.gcf()
+        plt.ylim([0.1,1])
         fig.set_size_inches(18.5,10.5)
         plt.tight_layout(pad=2)
         plt.savefig('tmp/performance-aligned-%02d.eps' % (ri // 2), dpi=100)
@@ -439,3 +445,25 @@ if __name__ == '__main__':
         learner_count = 4
         
         load_models_info(root_dir, ri, learner_count)
+
+
+        f, axarr = plt.subplots(1, 1, sharey = True)
+        draw_plot(all_scores, 'TCGA-BRCA-N',
+            ('regularizer_index', ri), axarr, False)
+        fig = plt.gcf()
+        plt.ylim([0.1,1])
+        fig.set_size_inches(8,5)
+        plt.tight_layout(pad=2)
+        plt.savefig('tmp/one-performance-aligned-%02d.eps' % (ri // 2), dpi=100)
+        plt.close()
+
+
+        
+    regularizer_indices = [2, 4, 6, 8, 10, 12, 14, 16, 18]
+    for ri in regularizer_indices:
+        print(ri)
+        learner_count = 4
+        load_models_info(root_dir, ri, learner_count, data='TCGA-LAML-GeneExpression',
+                         target='risk_group')
+        #load_models_info(root_dir, ri, learner_count, data='vantveer',
+        #                 target='prognosis')

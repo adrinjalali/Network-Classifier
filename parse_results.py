@@ -371,7 +371,7 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_7/"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_9/"
 
     all_scores = get_scores(root_dir)
 

@@ -64,10 +64,18 @@ if __name__ == '__main__':
         _f("nu svc")
         print_log(all_scores, rat_scores)
 
+    def add_to_scores(params):
+        current = all_scores
+        for item in params:
+            if not (item in current):
+                current[item] = dict()
+            current = current[item]
+
+
     print('hi', file=sys.stderr);
 
     working_dir = ''
-    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_3/TCGA-LAML/vital_status/'
+    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_8/TCGA-BRCA/T'
     method = ''
     #method = 'ratboost_linear_svc'
     cv_index = -1
@@ -109,74 +117,93 @@ if __name__ == '__main__':
 
     if (method == 'others'):
 
-        machine = svm.NuSVC(nu=0.25,
+        for nu in np.arange(7) * 0.1 + 0.05:
+            try:
+                machine = svm.NuSVC(nu=nu,
                             kernel='linear',
                             verbose=False,
                             probability=False)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = cpu_count,
-            verbose=1)
-        this_method = 'SVM, linear kernel'
-        all_scores[this_method] = dict()
-        all_scores[this_method][('nu', 0.25)] = scores
+                scores = cv.cross_val_score(
+                    machine, tmpX, y,
+                    cv = cvs,
+                    scoring = 'roc_auc',
+                    n_jobs = cpu_count,
+                    verbose=1)
+                this_method = 'SVM, linear kernel'
+                add_to_scores([this_method, ('nu', nu)])
+                all_scores[this_method][('nu', nu)] = scores
+            except ValueError as e:
+                print(nu, e)
 
-        machine = svm.NuSVC(nu=0.25,
+            try:
+                machine = svm.NuSVC(nu=nu,
                             kernel='rbf',
                             verbose=False,
                             probability=False)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = cpu_count,
-            verbose=1)
-        this_method = 'SVM, RBF kernel'
-        all_scores[this_method] = dict()
-        all_scores[this_method][('nu', 0.25)] = scores
+                scores = cv.cross_val_score(
+                    machine, tmpX, y,
+                    cv = cvs,
+                    scoring = 'roc_auc',
+                    n_jobs = cpu_count,
+                    verbose=1)
+                this_method = 'SVM, RBF kernel'
+                add_to_scores([this_method, ('nu', nu)])
+                all_scores[this_method][('nu', nu)] = scores
+            except ValueError as e:
+                print(nu, e)
 
-        machine = svm.NuSVC(nu=0.25,
+            try:
+                machine = svm.NuSVC(nu=nu,
                             kernel='linear',
                             verbose=False,
                             probability=False)
-        scores = cv.cross_val_score(
-            machine, X_prime, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = cpu_count,
-            verbose=1)
-        this_method = 'SVM, linear kernel, transformed'
-        all_scores[this_method] = dict()
-        all_scores[this_method][('nu', 0.25)] = scores
+                scores = cv.cross_val_score(
+                    machine, X_prime, y,
+                    cv = cvs,
+                    scoring = 'roc_auc',
+                    n_jobs = cpu_count,
+                    verbose=1)
+                this_method = 'SVM, linear kernel, transformed'
+                add_to_scores([this_method, ('nu', nu)])
+                all_scores[this_method][('nu', nu)] = scores
+            except ValueError as e:
+                print(nu, e)
+                
+        for mf in np.arange(3) * 5 + 5:
+            for md in np.arange(3) + 1:
+                for ne in [5, 20, 50, 100, 200]:
+                    machine = sklearn.ensemble.GradientBoostingClassifier(
+                        max_features = mf,
+                        max_depth = md,
+                        n_estimators = ne)
+                    scores = cv.cross_val_score(
+                        machine, tmpX, y,
+                        cv = cvs,
+                        scoring = 'roc_auc',
+                        n_jobs = cpu_count,
+                        verbose=1)
+                    this_method = 'Gradient Boosting Classifier'
+                    add_to_scores([this_method, ('max_features', mf),
+                           ('max_depth', md), ('N', ne)])
+                    all_scores[this_method][('max_features', mf)] \
+                        [('max_depth', md)][('N', ne)] = scores
 
-        machine = sklearn.ensemble.GradientBoostingClassifier(max_features = 5,
-                                                              max_depth = 2,
-                                                              n_estimators = 100)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = cpu_count,
-            verbose=1)
-        this_method = 'Gradient Boosting Classifier'
-        all_scores[this_method] = dict()
-        all_scores[this_method][('N', 100)] = scores
-
-        machine = sklearn.ensemble.AdaBoostClassifier(
-            sklearn.tree.DecisionTreeClassifier(max_depth=2),
-            algorithm = "SAMME.R",
-            n_estimators = 100)
-        scores = cv.cross_val_score(
-            machine, tmpX, y,
-            cv = cvs,
-            scoring = 'roc_auc',
-            n_jobs = cpu_count,
-            verbose=1)
-        this_method = 'Adaboost'
-        all_scores[this_method] = dict()
-        all_scores[this_method][('N', 100)] = scores
+        for md in np.arange(3) + 1:
+            for ne in [5, 20, 50, 100, 200]:
+                machine = sklearn.ensemble.AdaBoostClassifier(
+                    sklearn.tree.DecisionTreeClassifier(max_depth=2),
+                    algorithm = "SAMME.R",
+                    n_estimators = ne)
+                scores = cv.cross_val_score(
+                    machine, tmpX, y,
+                    cv = cvs,
+                    scoring = 'roc_auc',
+                    n_jobs = cpu_count,
+                    verbose=1)
+                this_method = 'Adaboost'
+                add_to_scores([this_method, ('max_depth', md),
+                               ('N', ne)])
+                all_scores[this_method][('max_depth', md)][('N', ne)] = scores
 
         print_log(all_scores, rat_scores)
 

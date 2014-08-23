@@ -75,7 +75,8 @@ def get_max_score(scores, prefix = ''):
 def print_scores(scores, prefix = ''):
     if (len(scores) == 0):
         return
-    report_max = ['N', 'learner_type']
+    #report_max = ['N', 'learner_type']
+    report_max = []
     ignore_params = ['learner_type']
     if isinstance(scores, dict):
         key0 = next(iter(scores.keys()))
@@ -92,7 +93,7 @@ def print_scores(scores, prefix = ''):
                     print_scores(value, "\t")
             return
     else:
-        message = "%s: %.3lg +/- %.3lg" % (prefix,
+        message = "%s (count: %d): %.3lg +/- %.3lg" % (prefix, len(scores),
                                            np.mean(scores),
                                            2 * np.std(scores))
     for s in ignore_params:

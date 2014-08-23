@@ -33,6 +33,7 @@ if __name__ == '__main__':
     data_name = ''
     target_name = ''
     dump_dir = ''
+    batch_based_cv = False
     for i in range(len(sys.argv)):
         print(sys.argv[i])
         if (sys.argv[i] == '--data'):
@@ -41,6 +42,8 @@ if __name__ == '__main__':
             target_name = sys.argv[i + 1]
         if (sys.argv[i] == '--dump-dir'):
             dump_dir = sys.argv[i + 1]
+        if (sys.argv[i] == '--batch-based-cv'):
+            batch_based_cv = True
 
     print(data_name, target_name, dump_dir)
         
@@ -65,6 +68,33 @@ if __name__ == '__main__':
             (tmpX, y, g,
              sample_annotation,
              feature_annotation) = read_tcga_brca.load_data(target_name)
+        if (batch_based_cv):
+            tmp = read_csv('/TL/stat_learn/work/ajalali/Data/TCGA-BRCA/TCGA-BRCA-batches.txt', skip_header = False)
+            sample_names = list(sample_annotation[:,0])
+            batches = dict()
+            for i in range(len(tmp)):
+                row = tmp[i][0]
+                if (row.startswith('Batch')):
+                    batch = row
+                    batches[batch] = list()
+                else:
+                    row = row[:-3]
+                    try:
+                        batches[batch].append((row, sample_names.index(row)))
+                    except ValueError:
+                        pass
+            cvs = list()
+            all_samples = set()
+            for l in batches.values():
+                all_samples = all_samples.union([a[1] for a in l])
+
+            for l in batches.values():
+                if (len(l) > 10):
+                    indices = list(set([a[1] for a in l]))
+                    cvs.append((np.array(list(all_samples.difference(indices))),
+                                np.array(list(indices))))
+
+            
     elif (data_name == 'TCGA-LAML'):
         ''' load TCGA LAML data '''
         if (target_name in {'vital_status', 'risk_group'}):
@@ -88,8 +118,9 @@ if __name__ == '__main__':
 
     print("saving data...")
 
-    fold_count = 100
-    cvs = list(cv.StratifiedShuffleSplit(y, n_iter = fold_count, test_size = 0.2))
+    if (batch_based_cv == False):
+        fold_count = 100
+        cvs = list(cv.StratifiedShuffleSplit(y, n_iter = fold_count, test_size = 0.2))
 
     np.savez(open(dump_dir + '/npdata.npz', 'wb'),
              tmpX = tmpX, X_prime = X_prime, y = y,

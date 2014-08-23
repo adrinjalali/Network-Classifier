@@ -568,7 +568,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         confidences = np.empty((X.shape[0],0), dtype=float)
         for l in self.learners:
             predictions = np.hstack((predictions,
-                                     l.predict(X).reshape(-1,1)))
+                                     l.decision_function(X).reshape(-1,1)))
             confidences = np.hstack((confidences,
                                      l.getConfidence(X).reshape(-1,1)))
 

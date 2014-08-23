@@ -21,23 +21,34 @@ TCGA_root_dir = "/TL/stat_learn/work/ajalali/Data/TCGA-BRCA"
 
 def read_methylation_annotation():
     tmp = read_csv(Globals.met_annot_file, skip_header=True, delimiter=',')
-    tmp = [[row[i] for i in [1, 4, 9, 16, 17]] for row in tmp]
+    tmp = [[row[i] for i in [1, 4, 9, 16, 17, 11]] for row in tmp]
     tmp = np.array(tmp)
-    tmp = tmp.view(dtype=[('TargetID', 'U367'),
+    
+    promoter_meta = set(['TSS200', 'TSS1500', "5'UTR", '1stExon'])
+    promoter = [len(promoter_meta.intersection(row[5].split(';'))) > 0
+                for row in tmp]
+
+    boz = np.hstack((tmp, np.array(promoter).astype(int).reshape(-1,1)))
+
+    tmp2 = boz.view(dtype=[('TargetID', 'U367'),
                           ('CHR', 'U367'),
                           ('GeneNames', 'U367'),
                           ('snp_hit', 'U367'),
-                          ('bwa_multi_hit', 'U367')])
-                           
-    tmp['CHR'][(tmp['CHR'] == 'X') | (tmp['CHR'] == 'Y')] = '23'
-    tmp['CHR'][tmp['CHR'] == 'NA'] = '24'
+                          ('bwa_multi_hit', 'U367'),
+                          ('UCSC_REFGENE_REGION', 'U367'),
+                          ('is_promoter', 'U367')])
     
-    tmp = tmp.astype([('TargetID', 'U367'),
+    tmp2['CHR'][(tmp2['CHR'] == 'X') | (tmp2['CHR'] == 'Y')] = '23'
+    tmp2['CHR'][tmp2['CHR'] == 'NA'] = '24'
+    
+    tmp3 = tmp2.astype([('TargetID', 'U367'),
                       ('CHR', 'int32'),
                       ('GeneNames', 'U367'),
                       ('snp_hit', 'U367'),
-                      ('bwa_multi_hit', 'U367')]).view(np.recarray)
-    return tmp
+                      ('bwa_multi_hit', 'U367'),
+                      ('UCSC_REFGENE_REGION', 'U367'),
+                      ('is_promoter', 'bool')]).view(np.recarray)
+    return tmp3
 
 def networkize_illumina450k(X, probe_names):
     # read PPI network.
@@ -73,9 +84,11 @@ def networkize_illumina450k(X, probe_names):
     site_idx = ((met_annot.CHR > 0) & (met_annot.CHR < 23) &
                 (met_annot.snp_hit == 'FALSE') &
                 (met_annot.bwa_multi_hit == 'FALSE')).reshape(-1)
-    met_annot = met_annot[site_idx,]
-    met_sites = met_sites[site_idx,]
     '''
+    site_idx = met_annot.is_promoter.reshape(-1)
+    met_annot = met_annot[site_idx,]
+    X = X[:,site_idx]
+
     probe_genes = set(chain(*chain(*met_annot.GeneNames.strip().split(';')))) - {''}
 
     # gene2met contains indices of met_annot for each gene.

@@ -30,10 +30,10 @@ run_for_data(){
 #run_for_data_others $1 TCGA-LAML-GeneExpression vital_status
 #run_for_data_others $1 TCGA-LAML-GeneExpression risk_group
 
-#run_for_data_others $1 TCGA-BRCA ER
-#run_for_data_others $1 TCGA-BRCA T
-#run_for_data_others $1 TCGA-BRCA N
-#run_for_data_others $1 TCGA-BRCA stage
+run_for_data_others $1 TCGA-BRCA ER
+run_for_data_others $1 TCGA-BRCA T
+run_for_data_others $1 TCGA-BRCA N
+run_for_data_others $1 TCGA-BRCA stage
 
 
 for RI in 2 4 6 8 10 12 14 16 18

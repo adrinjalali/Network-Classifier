@@ -212,6 +212,33 @@ for train, test in cvs:
     fig.set_size_inches(7,7)
     plt.xlim([0,100])
     plt.axvline(mid, c='g')
-            plt.savefig('tmp/density-%s-%s-%d.eps' %
+    plt.savefig('tmp/density-%s-%s-%d.eps' %
                         (data, target, regularizer_index // 2), dpi=100)
-            plt.close()
+    plt.close()
+
+
+
+machine.fit(tmpX, y)
+    
+density = gaussian_kde(abs(machine.coef_))
+xs = np.linspace(0, np.max(abs(machine.coef_)), 200)
+density.covariance_factor = lambda : .25
+density._compute_covariance()
+
+low =  0
+high = max(max(machine.coef_))
+target_top = 0.01
+while(True):
+    mid = (low + high) / 2
+    mid_v = density.integrate_box_1d(mid, 1e4)
+    if (abs(mid_v - target_top) < 1e-4):
+        break
+    if (mid_v > target_top):
+        low = mid
+    elif (mid_v < target_top):
+        high = mid
+
+print(np.sum(abs(machine.coef_) > mid))
+plt.axvline(mid, c='g')
+plt.plot(xs, density(xs))
+plt.show()

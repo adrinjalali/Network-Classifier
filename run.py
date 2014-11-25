@@ -29,12 +29,12 @@ if __name__ == '__main__':
         rat = Rat(learner_count = 1,
                   learner_type = learner_type,
                   regularizer_index = regularizer_index,
-                  n_jobs = 1)
+                  n_jobs = cpu_count)
         result = rat_cross_val_score(
-            rat, tmpX, y,
+            rat, X, y,
             cv=cvs,
             scoring = 'roc_auc',
-            n_jobs=cpu_count,
+            n_jobs=1,
             verbose=1,
             max_learner_count = max_learner_count)
 
@@ -79,8 +79,10 @@ if __name__ == '__main__':
     method = ''
     #method = 'ratboost_linear_svc'
     cv_index = -1
-    #cv_index = 10
+    #cv_index = 5
+    cpu_count = 1
     regularizer_index = None
+    batch_based_cv = False
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
         if (sys.argv[i] == '--working-dir'):
@@ -91,27 +93,71 @@ if __name__ == '__main__':
             cv_index = int(sys.argv[i + 1]) - 1
         if (sys.argv[i] == '--regularizer-index'):
             regularizer_index = int(sys.argv[i + 1])
+        if (sys.argv[i] == '--batch-based'):
+            batch_based_cv = True
+        if (sys.argv[i] == '--cpu-count'):
+            cpu_count = int(sys.argv[i + 1])
+    
 
-    print(working_dir, method, cv_index, regularizer_index, file=sys.stderr)
+    print(working_dir, method, cv_index, regularizer_index, cpu_count
+          , file=sys.stderr)
+    try:
+        os.mkdir(working_dir + '/results')
+    except Exception as e:
+        print(e, file=sys.stderr)
+
+    try:
+        os.mkdir(working_dir + '/models')
+    except Exception as e:
+        print(e, file=sys.stderr)
 
     print("loading data...", file=sys.stderr)
 
-    data_file = np.load(working_dir + '/npdata.npz')
-    tmpX = data_file['tmpX']
-    X_prime = data_file['X_prime']
-    y = data_file['y']
-    sample_annotation = data_file['sample_annotation']
-    feature_annotation = data_file['feature_annotation']
-    g = gt.load_graph(working_dir + '/graph.xml.gz')
-    cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
+    print("trying an old input format...", file=sys.stderr)
+    data_loaded = False
+    try:
+        data_file = np.load(working_dir + '/npdata.npz')
+        X = data_file['tmpX']
+        X_prime = data_file['X_prime']
+        y = data_file['y']
+        sample_annotation = data_file['sample_annotation']
+        feature_annotation = data_file['feature_annotation']
+        g = gt.load_graph(working_dir + '/graph.xml.gz')
+        cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
+        data_loaded = True
+    except Exception as e:
+        print(e, file=sys.stderr)
 
+    if (not data_loaded):
+        print("trying another input format...", file=sys.stderr)
+        try:
+            data_file = np.load(working_dir + '/data.npz');
+            X = data_file['X']
+            X_prime = data_file['X_prime']
+            y = data_file['y']
+            sample_annotation = data_file['patient_annot']
+            data_file = np.load(working_dir + '/../genes.npz')
+            feature_annotation = data_file['genes']
+            g = gt.load_graph(working_dir + '/../graph.xml.gz')
+            if (batch_based_cv):
+                cvs = pickle.load(open(working_dir + '/batch_cvs.dmp', 'rb'))
+            else:
+                cvs = pickle.load(open(working_dir + '/normal_cvs.dmp', 'rb'))
+            data_loaded = True
+        except Exception as e:
+            print(e)
+
+    if (cv_index > len(cvs) - 1):
+        print("requested cv (%d) doesn't exist (len(cvs) = %d)" % (cv_index,
+                                                                   len(cvs)))
+        sys.exit(0)
+            
     #choosing only one cross-validation fold
     tmp = list()
     tmp.append((cvs[cv_index]))
     cvs = tmp
     
-    cpu_count = 1
-    max_learner_count = 30
+    max_learner_count = 15
     rat_scores = dict()
     all_scores = defaultdict(list)
 
@@ -124,7 +170,7 @@ if __name__ == '__main__':
                             verbose=False,
                             probability=False)
                 scores = cv.cross_val_score(
-                    machine, tmpX, y,
+                    machine, X, y,
                     cv = cvs,
                     scoring = 'roc_auc',
                     n_jobs = cpu_count,
@@ -141,7 +187,7 @@ if __name__ == '__main__':
                             verbose=False,
                             probability=False)
                 scores = cv.cross_val_score(
-                    machine, tmpX, y,
+                    machine, X, y,
                     cv = cvs,
                     scoring = 'roc_auc',
                     n_jobs = cpu_count,
@@ -177,7 +223,7 @@ if __name__ == '__main__':
                         max_depth = md,
                         n_estimators = ne)
                     scores = cv.cross_val_score(
-                        machine, tmpX, y,
+                        machine, X, y,
                         cv = cvs,
                         scoring = 'roc_auc',
                         n_jobs = cpu_count,
@@ -191,11 +237,11 @@ if __name__ == '__main__':
         for md in np.arange(3) + 1:
             for ne in [5, 20, 50, 100, 200]:
                 machine = sklearn.ensemble.AdaBoostClassifier(
-                    sklearn.tree.DecisionTreeClassifier(max_depth=2),
+                    sklearn.tree.DecisionTreeClassifier(max_depth=md),
                     algorithm = "SAMME.R",
                     n_estimators = ne)
                 scores = cv.cross_val_score(
-                    machine, tmpX, y,
+                    machine, X, y,
                     cv = cvs,
                     scoring = 'roc_auc',
                     n_jobs = cpu_count,
@@ -221,6 +267,7 @@ if __name__ == '__main__':
         rat_method = ' '.join(re.split('_', method)[1:])
         scores, model = _f(rat_method, regularizer_index)
         print_log(all_scores, rat_scores)
+            
         dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
                     (method, cv_index, regularizer_index, str(uuid.uuid1())),
                     rat_scores)

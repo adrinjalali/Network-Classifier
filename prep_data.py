@@ -15,6 +15,7 @@ from collections import defaultdict
 import time
 from joblib import Parallel, delayed, logger
 import pickle
+import shutil
 
 
 from constants import *;
@@ -25,6 +26,7 @@ import read_vantveer
 import read_tcga_brca
 import read_tcga_laml
 import read_tcga_laml_geneexpression
+import read_tcga
 from rat import *
 
 if __name__ == '__main__':
@@ -49,58 +51,36 @@ if __name__ == '__main__':
         
 
     if (data_name == 'nordlund'):
-        if (target_name == 'TvsB'):
-            ''' load nordlund T-ALL vs BCP-ALL '''
-            (tmpX, y, g,
-             sample_annotation, feature_annotation) = read_nordlund1.load_data()
-        elif (target_name == 'HeHvst1221'):
-            ''' load  nordlund subtypes A vs subtypes B '''
-            (tmpX, y, g,
-             sample_annotation,
-             feature_annotation) = read_nordlund2.load_data('HeH', 't(12;21)')
+        print("nordlund didn't give us enough information about the dataset,\
+        and we decided not to work on the dataset anymore.\
+        continuing without any output...")
+        sys.exit(0)
+        
     elif (data_name == 'vantveer'):
         ''' load vantveer data poor vs good prognosis '''
         (tmpX, y, g,
          sample_annotation, feature_annotation) = read_vantveer.load_data()
-    elif (data_name == 'TCGA-BRCA'):
-        if (target_name in {'ER', 'T', 'N', 'stage'}):
-            ''' load TCGA BRCA data '''
-            (tmpX, y, g,
-             sample_annotation,
-             feature_annotation) = read_tcga_brca.load_data(target_name)
-        if (batch_based_cv):
-            tmp = read_csv('/TL/stat_learn/work/ajalali/Data/TCGA-BRCA/TCGA-BRCA-batches.txt', skip_header = False)
-            sample_names = list(sample_annotation[:,0])
-            batches = dict()
-            for i in range(len(tmp)):
-                row = tmp[i][0]
-                if (row.startswith('Batch')):
-                    batch = row
-                    batches[batch] = list()
-                else:
-                    row = row[:-3]
-                    try:
-                        batches[batch].append((row, sample_names.index(row)))
-                    except ValueError:
-                        pass
-            cvs = list()
-            all_samples = set()
-            for l in batches.values():
-                all_samples = all_samples.union([a[1] for a in l])
+        print("calculating L and transformation of the data...")
+        B = gt.spectral.laplacian(g)
+        M = np.identity(B.shape[0]) + Globals.beta * B
+        M_inv = np.linalg.inv(M)
+        L = np.linalg.cholesky(M_inv)
+        X_prime = tmpX.dot(L)
 
-            for l in batches.values():
-                if (len(l) > 10):
-                    indices = list(set([a[1] for a in l]))
-                    cvs.append((np.array(list(all_samples.difference(indices))),
-                                np.array(list(indices))))
+        print("saving data...")
+    
+        if (batch_based_cv == False):
+            fold_count = 100
+            cvs = list(cv.StratifiedShuffleSplit(
+                y, n_iter = fold_count, test_size = 0.2))
 
-            
-    elif (data_name == 'TCGA-LAML'):
-        ''' load TCGA LAML data '''
-        if (target_name in {'vital_status', 'risk_group'}):
-            (tmpX, y, g,
-             sample_annotation,
-             feature_annotation) = read_tcga_laml.load_data(target_name)
+        np.savez(open(dump_dir + '/npdata.npz', 'wb'),
+                tmpX = tmpX, X_prime = X_prime, y = y,
+                sample_annotation = sample_annotation,
+                feature_annotation = feature_annotation)
+        g.save(dump_dir + '/graph.xml.gz')
+        pickle.dump(cvs, open(dump_dir + '/cvs.dmp', 'wb'))
+        sys.exit(0)
     elif (data_name == 'TCGA-LAML-GeneExpression'):
         ''' load TCGA LAML data '''
         if (target_name in {'vital_status', 'risk_group'}):
@@ -108,46 +88,81 @@ if __name__ == '__main__':
              sample_annotation,
              feature_annotation) = read_tcga_laml_geneexpression.load_data(
                  target_name)
+        print("calculating L and transformation of the data...")
+        B = gt.spectral.laplacian(g)
+        M = np.identity(B.shape[0]) + Globals.beta * B
+        M_inv = np.linalg.inv(M)
+        L = np.linalg.cholesky(M_inv)
+        X_prime = tmpX.dot(L)
 
-    print("calculating L and transformation of the data...")
-    B = gt.spectral.laplacian(g)
-    M = np.identity(B.shape[0]) + Globals.beta * B
-    M_inv = np.linalg.inv(M)
-    L = np.linalg.cholesky(M_inv)
-    X_prime = tmpX.dot(L)
-
-    print("saving data...")
-
-    if (batch_based_cv == False):
-        fold_count = 100
-        cvs = list(cv.StratifiedShuffleSplit(y, n_iter = fold_count, test_size = 0.2))
-
-    np.savez(open(dump_dir + '/npdata.npz', 'wb'),
-             tmpX = tmpX, X_prime = X_prime, y = y,
-             sample_annotation = sample_annotation,
-             feature_annotation = feature_annotation)
-    g.save(dump_dir + '/graph.xml.gz')
-    pickle.dump(cvs, open(dump_dir + '/cvs.dmp', 'wb'))
-
-    print('bye')
-    '''
-    cpu_count = 1
-    max_learner_count = 40
-    rat_scores = dict()
-    all_scores = defaultdict(list)
-
+        print("saving data...")
     
-    machine = svm.NuSVC(nu=0.25,
-                        kernel='linear',
-                        verbose=False,
-                        probability=False)
-    scores = cv.cross_val_score(
-        machine, tmpX, y,
-        cv = cvs,
-        scoring = 'roc_auc',
-        n_jobs = cpu_count,
-        verbose=1)
-    all_scores['original, nuSVM(0.25), linear'].append(scores)
+        if (batch_based_cv == False):
+            fold_count = 100
+            cvs = list(cv.StratifiedShuffleSplit(
+                y, n_iter = fold_count, test_size = 0.2))
 
-    print_log(all_scores, rat_scores)
-    '''
+        np.savez(open(dump_dir + '/npdata.npz', 'wb'),
+                tmpX = tmpX, X_prime = X_prime, y = y,
+                sample_annotation = sample_annotation,
+                feature_annotation = feature_annotation)
+        g.save(dump_dir + '/graph.xml.gz')
+        pickle.dump(cvs, open(dump_dir + '/cvs.dmp', 'wb'))
+        sys.exit(0)
+        
+    elif (data_name == 'TCGA-BRCA'):
+        input_dir = "/TL/stat_learn/work/ajalali/Data/TCGA-BRCA/"
+        sample_type = '01A'
+        target_labels = {'er_status_by_ihc': {-1: 'Negative', 1: 'Positive'},
+                 'ajcc_pathologic_tumor_stage': {-1: ['Stage I','Stage IA','Stage IB',
+                           'Stage II','Stage IIA', 'Stage IIB'],
+                           1: ['Stage III', 'Stage IIIA', 'Stage IIIB']},
+                 'ajcc_tumor_pathologic_pt': {-1: ['T1', 'T2'], 1: ['T3', 'T4']},
+                 'ajcc_nodes_pathologic_pn': {-1: 'N0', 1: ['N1', 'N2', 'N3']}}
+            
+    elif (data_name == 'TCGA-LAML'):
+        input_dir = "/TL/stat_learn/work/ajalali/Data/TCGA-LAML/"
+        sample_type = '03A'
+        target_labels = {'cyto_risk_group': {-1: 'Favorable',
+                                        1: ['Intermediate/Normal', 'Poor']},
+                         'vital_status': {-1: 'Alive', 1: 'Dead'}}
+            
+    elif (data_name == 'TCGA-UCEC'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-UCEC/'
+        sample_type = '01A'
+        target_labels = {'vital_status': {-1:'Dead', 1:'Alive'},
+                        'tumor_status': {-1: 'TUMOR FREE', 1: 'WITH TUMOR'},
+                        'retrospective_collection': {-1: 'NO', 1: 'YES'}}
+    elif (data_name == 'TCGA-THCA'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-THCA'
+        sample_type = '01A'
+        target_labels = {'tumor_focality': {1: 'Multifocal',
+                                            -1: 'Unifocal'},
+                         'ajcc_pathologic_tumor_stage': {1: ['Stage I', 'Stage II'],
+                                                         -1: ['Stage III',
+                                                              'Stage IV',
+                                                              'Stage IVA',
+                                                              'Stage IVC']}}
+    elif (data_name == 'TCGA-SARC'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-SARC/'
+        sample_type = '01A'
+        target_labels = {'vital_status': {-1:'Dead', 1:'Alive'},
+                        'tumor_status': {-1: 'TUMOR FREE', 1: 'WITH TUMOR'},
+                        'residual_tumor': {-1: 'R0', 1: 'R1'}}
+    elif (data_name == 'TCGA-LGG'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-LGG/'
+        sample_type = '01A'
+        target_labels = {'vital_status': {-1:'Dead', 1:'Alive'},
+                        'tumor_status': {-1: 'TUMOR FREE', 1: 'WITH TUMOR'},
+                        'histologic_diagnosis': {-1: 'Astrocytoma',
+                                                 1: 'Oligodendroglioma'},
+                        'tumor_grade': {-1: 'G2', 1:'G3'}}
+    
+    data = read_tcga.load_data(input_dir = input_dir,
+                sample_type = sample_type,
+                target_labels = target_labels)
+
+    print('copy from %s/processed \nto %s/%s' % (input_dir, dump_dir, data_name))
+    shutil.copytree(input_dir + '/processed', dump_dir + '/' + data_name)
+    
+    print('bye')

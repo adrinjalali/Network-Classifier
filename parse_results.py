@@ -1,5 +1,5 @@
 import matplotlib as mpl
-mpl.use('Agg')
+#mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
@@ -58,9 +58,15 @@ def get_scores(root_dir):
     for data in datas:
         print(data)
         targets = os.listdir(root_dir + '/' + data)
+        targets = [name for name in targets if os.path.isdir(
+            '%s/%s/%s' % (root_dir, data, name))]
 
         for target in targets:
             print(target)
+            if (not os.path.isdir('%s/%s/%s/results/' % (root_dir,
+                                                      data,
+                                                      target))):
+                continue;
             files = os.listdir('%s/%s/%s/results/' % (root_dir,
                                                       data,
                                                       target))
@@ -371,7 +377,7 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_9/"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_29_sep_2014/"
 
     all_scores = get_scores(root_dir)
 
@@ -467,3 +473,59 @@ if __name__ == '__main__':
                          target='risk_group')
         #load_models_info(root_dir, ri, learner_count, data='vantveer',
         #                 target='prognosis')
+
+    def get_points(v):
+        if (isinstance(v, dict)):
+            result = list()
+            for x in v.values():
+                p = get_points(x)
+                [result.append(r) for r in p]
+            return result
+        if (isinstance(v, list)):
+            return [(np.mean(v), np.std(v), len(v))]
+
+
+    import matplotlib.patches as mpatches
+    from datetime import datetime
+        
+    colors = ['b', 'g', 'y', 'k', 'c', 'r', 'm', '0.5', '0.9']
+    for key, value in all_scores.items():
+        points = dict()
+        c = 0
+        pcolors = list()
+        x = list()
+        y = list()
+        patches = list()
+        lens = list()
+        desc_lens = dict()
+        jkeys = sorted(value.keys())
+        for jkey in jkeys:
+            jvalue = value[jkey]
+            ps = get_points(jvalue)
+            points[jkey] = ps
+            [x.append(i[0]) for i in ps]
+            [y.append(i[1]) for i in ps]
+            [lens.append(i[2]) for i in ps]
+            desc_lens[jkey] = [i[2] for i in ps]
+            [pcolors.append(colors[c]) for i in ps]
+            patches.append(mpatches.Patch(color=colors[c], label=jkey))
+            c = c + 1
+
+        if (len(lens) == 0):
+            continue
+
+        print('\n', key)
+        print(desc_lens)
+        scales = [(s - min(lens) + 1) * 100 / (max(lens) - min(lens) + 1)
+                  for s in lens]
+        plt.figure()
+        mplot = plt.scatter(x = x, y = y, c = pcolors, s = scales)
+        plt.title('%s, max: %d, min: %d' % (key, max(lens), min(lens)))
+        plt.legend(handles = patches, loc=1)
+        fig = plt.gcf()
+        fig.set_size_inches(18.5,10.5)
+        fig.savefig('plots/%s - performance_scatter - %s.eps' %
+                    (datetime.now().strftime("%Y-%m-%d %H%M"),
+                    key))
+        #plt.show()
+

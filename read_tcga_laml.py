@@ -85,9 +85,9 @@ def networkize_illumina450k(X, probe_names):
                 (met_annot.snp_hit == 'FALSE') &
                 (met_annot.bwa_multi_hit == 'FALSE')).reshape(-1)
     '''
-    site_idx = met_annot.is_promoter.reshape(-1)
-    met_annot = met_annot[site_idx,]
-    X = X[:,site_idx]
+    #site_idx = met_annot.is_promoter.reshape(-1)
+    #met_annot = met_annot[site_idx,]
+    #X = X[:,site_idx]
 
     probe_genes = set(chain(*chain(*met_annot.GeneNames.strip().split(';')))) - {''}
 

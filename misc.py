@@ -76,7 +76,7 @@ def print_scores(scores, prefix = ''):
     if (len(scores) == 0):
         return
     #report_max = ['N', 'learner_type']
-    report_max = []
+    report_max = ['N']
     ignore_params = ['learner_type']
     if isinstance(scores, dict):
         key0 = next(iter(scores.keys()))
@@ -178,20 +178,30 @@ def rat_cross_val_score(estimator, X, y=None, scoring=None, cv=None, n_jobs=1,
     jobs = list(dict())
 
     fit_params = fit_params if fit_params is not None else {}
-    parallel = Parallel(n_jobs=n_jobs, verbose=verbose,
-                        pre_dispatch=pre_dispatch)
 
     fit_params['from_scratch'] = True
     collected_scores = dict()
     scorer = sklearn.metrics.scorer.get_scorer(scoring)
-    result = parallel(
-        delayed(_fit_and_score)(
+    if (n_jobs > 1):
+        parallel = Parallel(n_jobs=n_jobs, verbose=verbose,
+                        pre_dispatch=pre_dispatch)
+        result = parallel(
+            delayed(_fit_and_score)(
+                estimator,
+                X, y, scorer,
+                train, test,
+                verbose, None, fit_params,
+                max_learner_count = max_learner_count)
+            for train, test in cv)
+    else:
+        print("going for single job system")
+        result = [_fit_and_score(
             estimator,
             X, y, scorer,
             train, test,
             verbose, None, fit_params,
             max_learner_count = max_learner_count)
-        for train, test in cv)
+            for train, test in cv]
     
     return (result)
 

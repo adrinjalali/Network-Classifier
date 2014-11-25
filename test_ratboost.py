@@ -25,19 +25,23 @@ from rat import *
 
 #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_8/TCGA-LAML/risk_group'
 #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_8/TCGA-BRCA/T'
-working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_9/TCGA-BRCA/ER'
+working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_21_sep_2014/TCGA-THCA/ajcc_pathologic_tumor_stage'
 method = 'ratboost_linear_svc'
-cv_index = 10
+cv_index = 2
+batch_based_cv = True
 
-
-data_file = np.load(working_dir + '/npdata.npz')
-tmpX = data_file['tmpX']
+data_file = np.load(working_dir + '/data.npz');
+X = data_file['X']
 X_prime = data_file['X_prime']
 y = data_file['y']
-sample_annotation = data_file['sample_annotation']
-feature_annotation = data_file['feature_annotation']
-g = gt.load_graph(working_dir + '/graph.xml.gz')
-cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
+sample_annotation = data_file['patient_annot']
+data_file = np.load(working_dir + '/../genes.npz')
+feature_annotation = data_file['genes']
+g = gt.load_graph(working_dir + '/../graph.xml.gz')
+if (batch_based_cv):
+    cvs = pickle.load(open(working_dir + '/batch_cvs.dmp', 'rb'))
+else:
+    cvs = pickle.load(open(working_dir + '/normal_cvs.dmp', 'rb'))
 
 #choosing only one cross-validation fold
 tmp = list()
@@ -47,16 +51,18 @@ cvs = tmp
 with open("./rat.py") as f:
     code = compile(f.read(), "rat.py", 'exec')
     exec(code)
+    
 rat = Rat(learner_count = 4,
     learner_type = 'linear svc',
-    regularizer_index = 10,
-    n_jobs = 1)
+    regularizer_index = 18,
+    n_jobs = 40)
 
-rat.fit(tmpX[cvs[0][0],],y[cvs[0][0]])
+rat.fit(X[cvs[0][0],],y[cvs[0][0]])
+
 print(roc_auc_score(y[cvs[0][0]], rat.decision_function(
-    tmpX[cvs[0][0],])),
+    X[cvs[0][0],])),
     roc_auc_score(y[cvs[0][1]], rat.decision_function(
-    tmpX[cvs[0][1],])))
+    X[cvs[0][1],])))
 
 
 high_C = 1

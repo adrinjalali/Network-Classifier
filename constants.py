@@ -13,7 +13,7 @@ class Globals:
     beta_file = nordlund_data + '/betas.npz'
     pval_file = nordlund_data + '/pvals.csv'
     sample_annotation_file = nordlund_data + '/samples.csv'
-    met_annot_file = nordlund_data + '/met_annot.csv'
+    met_annot_file = '/TL/stat_learn/work/ajalali/Data/met_annot.csv'
     
     beta = 10
     cfold_count = 100

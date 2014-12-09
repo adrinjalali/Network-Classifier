@@ -276,7 +276,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         if (not per_feature):
             return (result / weight_sum)
         else:
-            return per_feature_conf
+            return dict([(key,value/weight_sum) for key, value in per_feature_conf.items()])
         #res.append(result/weight_sum)
         '''
         if (hasattr(self.learner, 'predict_proba')):
@@ -410,13 +410,29 @@ class LinearSVCClassifier(BaseWeakClassifier):
         index = self.regularizer_index
         if (self.min_C is None):
             self.min_C = self.get_min_C(local_X, y)
-        cs = self.min_C * np.logspace(0,5)
+        cs = self.min_C * np.logspace(0,1)
         while (index < len(cs)):
             self.learner.set_params(C = cs[index])
             self.learner.fit(local_X, y)
             if (len(self.getClassifierFeatures()) > 0):
-                return(self.learner)
-            index += 5
+                print('training nusvm')
+                print(self.getClassifierFeatures())
+                local_cols = abs(self.learner.coef_.flatten()) > 0
+                #print(local_cols[0:50])
+                #print(sum(local_cols))
+                to_zero = np.arange(local_X.shape[1])[local_cols == False]
+                #print(to_zero[0:50])
+                tmp_X = np.copy(local_X)
+                tmp_X[:,to_zero] = 0
+                self.predictor = sklearn.svm.NuSVC(nu = 0.25,
+                                                   kernel = 'linear',
+                                                   probability = True)
+                self.predictor.fit(tmp_X, y)
+                self.learner = self.predictor
+                #print(self.getClassifierFeatures())
+                #return(self.learner)
+                return(self.predictor)
+            index += 1
             print(index, cs)
         return(self.learner)
 
@@ -440,7 +456,7 @@ class LinearSVCClassifier(BaseWeakClassifier):
 class NuSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
                  excluded_features=None,
-                 feature_confidence_estimator=PredictBasedFCE()):
+                 feature_confidence_estimator=PredictBasedFCE(feature_count=10)):
         learner = sklearn.svm.NuSVC(nu = 0.25,
                                     kernel = 'linear',
                                     probability = True)
@@ -509,7 +525,6 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                     l.excluded_features = np.empty(0, dtype=int)
                 else:
                     l.excluded_features = np.copy(self.excluded_features)
-            #l.fit(X[train_index,], y[train_index,])
             l.fit(X, y)
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)

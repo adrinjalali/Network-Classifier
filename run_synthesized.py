@@ -37,8 +37,8 @@ if __name__ == '__main__':
     bnet_count = -1
     feature_noise = -1
     result_dump_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results'
-    #data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results'
-    data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
+    data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
+    #data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
         if (sys.argv[i] == '--bnet_count'):
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     train_feature_bnet = tmp['train_feature_bnet']
     test_feature_bnet = tmp['test_feature_bnet']
 
-    cpu_count = 20
+    cpu_count = 50
 
     #cvs = list(cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2))
     

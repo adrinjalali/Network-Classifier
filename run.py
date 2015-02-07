@@ -23,64 +23,28 @@ from constants import *;
 from misc import *
 from rat import *
 
+def add_to_scores(params):
+    current = all_scores
+    for item in params:
+        if not (item in current):
+            current[item] = dict()
+        current = current[item]
+
+def log(msg=''):
+    d = list(filter(None, working_dir.split('/')))
+    print('%s\t%s\tcv:%d\t%s' % (d[-2], d[-1], cv_index, msg), file=sys.stderr, flush=True)
+    
 if __name__ == '__main__':
-    def _f(learner_type, regularizer_index = None):
-        print("%s" %(learner_type), file=sys.stderr)
-        rat = Rat(learner_count = 1,
-                  learner_type = learner_type,
-                  regularizer_index = regularizer_index,
-                  n_jobs = cpu_count)
-        result = rat_cross_val_score(
-            rat, X, y,
-            cv=cvs,
-            scoring = 'roc_auc',
-            n_jobs=1,
-            verbose=1,
-            max_learner_count = max_learner_count)
-
-        if (len(result) == 1):
-            models = result[0][1]
-        else:
-            models = [m for s, m in result]
-        
-        scores = [s for s, m in result]
-        scores = np.array(scores)
-        commulative_score = dict()
-        for i in range(max_learner_count):
-            commulative_score[('N',i + 1)] = scores[:,i,0]
-
-        this_method = 'RatBoost'
-        rat_scores[this_method] = dict()
-        rat_scores[this_method][('learner_type', learner_type)] = dict()
-        rat_scores[this_method][('learner_type', learner_type)]\
-          [('regularizer_index', regularizer_index)] = commulative_score
-        return((scores, models))
-
-    def _f_alltypes():
-        _f("logistic regression")
-        print_log(all_scores, rat_scores)
-        _f("linear svc")
-        print_log(all_scores, rat_scores)
-        _f("nu svc")
-        print_log(all_scores, rat_scores)
-
-    def add_to_scores(params):
-        current = all_scores
-        for item in params:
-            if not (item in current):
-                current[item] = dict()
-            current = current[item]
-
-
     print('hi', file=sys.stderr);
 
     working_dir = ''
-    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_8/TCGA-BRCA/T'
+    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_29_sep_2014/TCGA-UCEC/vital_status/'
+    #working_dir = 'scratch/TL/pool0/ajalali/ratboost/data_18_dec_2014//TCGA-THCA/ajcc_pathologic_tumor_stage'
     method = ''
     #method = 'ratboost_linear_svc'
     cv_index = -1
     #cv_index = 5
-    cpu_count = 1
+    cpu_count = 40
     regularizer_index = None
     batch_based_cv = False
     for i in range(len(sys.argv)):
@@ -111,9 +75,9 @@ if __name__ == '__main__':
     except Exception as e:
         print(e, file=sys.stderr)
 
-    print("loading data...", file=sys.stderr)
+    log("loading data...")
 
-    print("trying an old input format...", file=sys.stderr)
+    log("trying an old input format...")
     data_loaded = False
     try:
         data_file = np.load(working_dir + '/npdata.npz')
@@ -126,10 +90,10 @@ if __name__ == '__main__':
         cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
         data_loaded = True
     except Exception as e:
-        print(e, file=sys.stderr)
+        log(e)
 
     if (not data_loaded):
-        print("trying another input format...", file=sys.stderr)
+        log("trying another input format...")
         try:
             data_file = np.load(working_dir + '/data.npz');
             X = data_file['X']
@@ -145,76 +109,84 @@ if __name__ == '__main__':
                 cvs = pickle.load(open(working_dir + '/normal_cvs.dmp', 'rb'))
             data_loaded = True
         except Exception as e:
-            print(e)
+            log(e)
 
     if (cv_index > len(cvs) - 1):
-        print("requested cv (%d) doesn't exist (len(cvs) = %d)" % (cv_index,
+        log("requested cv (%d) doesn't exist (len(cvs) = %d)" % (cv_index,
                                                                    len(cvs)))
-        sys.exit(0)
+        sys.exit(1)
             
     #choosing only one cross-validation fold
     tmp = list()
     tmp.append((cvs[cv_index]))
     cvs = tmp
+
+    Xtrain = X[cvs[0][0],]
+    X_prime_train = X_prime[cvs[0][0],]
+    ytrain = y[cvs[0][0],]
+    Xtest = X[cvs[0][1],]
+    X_prime_test = X_prime[cvs[0][1],]
+    ytest = y[cvs[0][1],]
+
+    if (np.unique(ytest).shape[0] < 2):
+        log('ytest has only one value:%s' % (ytest))
+        log('exiting')
+        sys.exit(1)
     
-    max_learner_count = 15
+    max_learner_count = 25
     rat_scores = dict()
     all_scores = defaultdict(list)
 
-    if (method == 'others'):
+    if (method == 'all'):
 
+        log('svms')
         for nu in np.arange(7) * 0.1 + 0.05:
             try:
                 machine = svm.NuSVC(nu=nu,
-                            kernel='linear',
-                            verbose=False,
-                            probability=False)
-                scores = cv.cross_val_score(
-                    machine, X, y,
-                    cv = cvs,
-                    scoring = 'roc_auc',
-                    n_jobs = cpu_count,
-                    verbose=1)
+                                kernel='linear',
+                                verbose=False,
+                                probability=False)
+                machine.fit(Xtrain, ytrain)
+                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                log('lsvm\tnu:%g\t%s' % (nu, scores))
                 this_method = 'SVM, linear kernel'
                 add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = scores
+                all_scores[this_method][('nu', nu)] = [scores]
             except ValueError as e:
-                print(nu, e)
+                log('nu:%g\t%s' % (nu, e))
+            
 
             try:
                 machine = svm.NuSVC(nu=nu,
-                            kernel='rbf',
-                            verbose=False,
-                            probability=False)
-                scores = cv.cross_val_score(
-                    machine, X, y,
-                    cv = cvs,
-                    scoring = 'roc_auc',
-                    n_jobs = cpu_count,
-                    verbose=1)
+                                kernel='rbf',
+                                verbose=False,
+                                probability=False) 
+                machine.fit(Xtrain, ytrain)
+                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                log('gsvm\tnu:%g\t%s' % (nu, scores))
                 this_method = 'SVM, RBF kernel'
                 add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = scores
+                all_scores[this_method][('nu', nu)] = [scores]
             except ValueError as e:
-                print(nu, e)
-
+                log('nu:%g\t%s' % (nu, e))
+            
+        for nu in np.arange(7) * 0.1 + 0.05:
             try:
                 machine = svm.NuSVC(nu=nu,
-                            kernel='linear',
-                            verbose=False,
-                            probability=False)
-                scores = cv.cross_val_score(
-                    machine, X_prime, y,
-                    cv = cvs,
-                    scoring = 'roc_auc',
-                    n_jobs = cpu_count,
-                    verbose=1)
-                this_method = 'SVM, linear kernel, transformed'
+                                kernel='linear',
+                                verbose=False,
+                                probability=False)
+                machine.fit(Xtrain, ytrain)
+                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                log('lsvm`\tnu:%g\t%s' % (nu, scores))
+                this_method = 'SVM, linear kernel'
                 add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = scores
+                all_scores[this_method][('nu', nu)] = [scores]
             except ValueError as e:
-                print(nu, e)
+                log('nu:%g\t%s' % (nu, e))
+            
                 
+        log('gbc')
         for mf in np.arange(3) * 5 + 5:
             for md in np.arange(3) + 1:
                 for ne in [5, 20, 50, 100, 200]:
@@ -222,62 +194,82 @@ if __name__ == '__main__':
                         max_features = mf,
                         max_depth = md,
                         n_estimators = ne)
-                    scores = cv.cross_val_score(
-                        machine, X, y,
-                        cv = cvs,
-                        scoring = 'roc_auc',
-                        n_jobs = cpu_count,
-                        verbose=1)
+                    machine.fit(Xtrain, ytrain)
+                    scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                    log('gbc\tmf:%d\tmd:%d\tne:%d\t%s' % (mf, md, ne, scores))
                     this_method = 'Gradient Boosting Classifier'
                     add_to_scores([this_method, ('max_features', mf),
                            ('max_depth', md), ('N', ne)])
                     all_scores[this_method][('max_features', mf)] \
-                        [('max_depth', md)][('N', ne)] = scores
+                        [('max_depth', md)][('N', ne)] = [scores]
 
+        log('adaboost')
         for md in np.arange(3) + 1:
             for ne in [5, 20, 50, 100, 200]:
                 machine = sklearn.ensemble.AdaBoostClassifier(
                     sklearn.tree.DecisionTreeClassifier(max_depth=md),
                     algorithm = "SAMME.R",
                     n_estimators = ne)
-                scores = cv.cross_val_score(
-                    machine, X, y,
-                    cv = cvs,
-                    scoring = 'roc_auc',
-                    n_jobs = cpu_count,
-                    verbose=1)
+                machine.fit(Xtrain, ytrain)
+                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                log('adb\tmd:%d\tne:%d\t%s' % (md, ne, scores))
                 this_method = 'Adaboost'
                 add_to_scores([this_method, ('max_depth', md),
                                ('N', ne)])
-                all_scores[this_method][('max_depth', md)][('N', ne)] = scores
+                all_scores[this_method][('max_depth', md)][('N', ne)] = [scores]
 
-        print_log(all_scores, rat_scores)
+        log()
+        print_scores(all_scores)
 
         dump_scores(working_dir + '/results/%s-%d-others-%s.dmp' % \
                     (method, cv_index, str(uuid.uuid1())),
                     all_scores)
         
-    elif (method.startswith('ratboost')):
-        '''
-        method should be one of:
-        ratboost_logistic_regression
-        ratboost_linear_svc
-        ratboost_nu_svc
-        ''' 
-        rat_method = ' '.join(re.split('_', method)[1:])
-        scores, model = _f(rat_method, regularizer_index)
-        print_log(all_scores, rat_scores)
+    '''
+    method should be one of:
+    ratboost_logistic_regression
+    ratboost_linear_svc
+    ratboost_nu_svc
+    ''' 
+    log('ratboost')
+    max_learner_count = 25
+    this_method = 'RatBoost'
+    all_scores[this_method] = dict()
+    rat_models = list()
+    score_dump_file = working_dir + '/results/%s-%d-rat-%s.dmp' % \
+                (method, cv_index, str(uuid.uuid1()))
+    for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+        log('------------ ri:%g' % (ri))
+        rat = Rat(learner_count = max_learner_count,
+            learner_type = 'linear svc',
+            regularizer_index = ri,
+            n_jobs = cpu_count)
+        all_scores[this_method][('regularizer_index', ri)] = dict()
+        rat.fit(Xtrain, ytrain)
+        #rat_models.append(rat)
+        log('scores')
+        test_decision_values = rat.decision_function(Xtest, return_iterative = True)
+        train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
+        for i in range(len(test_decision_values)):
+            scores = roc_auc_score(ytest, test_decision_values[i])
+            log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
+            log('tst:\t%g' % (scores))
+
+            all_scores[this_method][('regularizer_index', ri)]\
+            [('N', i)] = [scores]
             
-        dump_scores(working_dir + '/results/%s-%d-rat-%d-%s.dmp' % \
-                    (method, cv_index, regularizer_index, str(uuid.uuid1())),
-                    rat_scores)
-        model_structure = [{f : (l.getClassifierFeatureWeights()[f],
-                                 l._FCEs[f].getFeatures())
-                                 for f in l.getClassifierFeatures()}
-                                 for l in model.learners]
-        pickle.dump(model_structure,
-                    open(working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
-                    (method, cv_index, regularizer_index, str(uuid.uuid1())), 'wb'))
+        log()
+        print_scores(all_scores)
+        
+        dump_scores(score_dump_file, all_scores)
+        #model_structure = [{f : (l.getClassifierFeatureWeights()[f],
+        #        l._FCEs[f].getFeatures())
+        #        for f in l.getClassifierFeatures()}
+        #        for l in rat.learners]
+        #model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
+        #    (method, cv_index, ri, str(uuid.uuid1()))
+        #pickle.dump(model_structure,
+        #    open(model_dump_file, 'wb'))
 
     
     print('bye', file=sys.stderr)

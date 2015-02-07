@@ -91,3 +91,67 @@ for pre in np.arange(5) * 0.05 + 0.55:
         else:
             break
     print("#################", feature_count, score)
+
+
+
+# testing RBFard on synthesized data
+
+import scipy.io
+import pyGPs
+import numpy as np
+data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
+bnet_count = 5
+feature_noise = .1
+tmp = scipy.io.loadmat('%s/data-bnet_count-%d-feature_noise-%g.mat' % (data_dir, bnet_count, feature_noise))
+Xtrain = tmp['Xtrain']
+ytrain = tmp['ytrain'].reshape(-1)
+Xtest = tmp['Xtest']
+ytest = tmp['ytest'].reshape(-1)
+train_feature_noise = tmp['train_feature_noise']
+test_feature_noise = tmp['test_feature_noise']
+train_feature_bnet = tmp['train_feature_bnet']
+test_feature_bnet = tmp['test_feature_bnet']
+
+model = pyGPs.GPR()
+#k = pyGPs.cov.RBFard(log_ell_list=[0.05,0.17], log_sigma=1.)
+k = pyGPs.cov.RBFard(D=1030)#D = Xtrain.shape[1], log_sigma = 0)
+model.setPrior(kernel=k)
+
+model.setData(Xtrain[:,1:], Xtrain[:,0])
+#model.plotData_2d(x1,x2,t1,t2,p1,p2)
+
+#model.getPosterior()
+model.optimize(Xtrain[:,1:], Xtrain[:,0])
+np.hstack((np.hstack(model.predict(Xtrain[1:40,1:])[0:2]), Xtrain[1:40,0:1]))
+model.predict(Xtrain[1:3,1:30])
+
+
+import sklearn
+import sklearn.ensemble
+def gradientboostingclassifier_get_feature_importances(model):
+    tmp = np.vstack((np.arange(len(machine.feature_importances_))[machine.feature_importances_ != 0], machine.feature_importances_[machine.feature_importances_ != 0]));
+    tmp = tmp[:,np.argsort(tmp)[1,]];
+    [print('%d, %g' % (tmp[0,i], tmp[1,i])) for i in range(tmp.shape[1])];
+        
+machine = sklearn.ensemble.GradientBoostingRegressor(
+    max_features = 5,
+    subsample=.8,
+    max_depth = 3,
+    n_estimators = 400)
+machine.fit(Xtrain[:,1:], Xtrain[:,0])
+gradientboostingclassifier_get_feature_importances(machine)
+
+
+from minepy import MINE
+def _evaluate_single(data, target_feature):
+    mine = MINE(alpha=0.4, c=15)
+    MICs = list()
+    for i in range(data.shape[1]):
+        mine.compute_score(target_feature,data[:,i])
+        MICs.append((mine.mic(), mine.mas(), mine.mev(), mine.mcn(), mine.mcn_general()))
+    return(MICs)
+mics = np.array(_evaluate_single(Xtrain[:,:], Xtrain[:,1]))
+values = np.array([mics[i][0] for i in range(len(mics))])
+tmp = np.vstack((np.arange(len(values))[values != 0], values[values != 0]));
+tmp = tmp[:,np.argsort(tmp)[1,]];
+[print('%g, %g' % (tmp[0,i], tmp[1,i])) for i in range(tmp.shape[1])];

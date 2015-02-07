@@ -29,12 +29,12 @@ class utilities:
 
     def check_1d_array(a):
         return(isinstance(a, np.ndarray) and (a.ndim == 1 or
-                                              a.shape[0] == 1 or
-                                              a.shape[1] == 1))
-
+                                              (a.ndim == 2 and
+                                              (a.shape[0] == 1 or
+                                              a.shape[1] == 1))))
 
 def _evaluate_single(data, target_feature):
-    mine = MINE(alpha=0.3, c=15)
+    mine = MINE(alpha=0.5, c=15)
     MICs = list()
     for i in range(data.shape[1]):
         mine.compute_score(target_feature,data[:,i])
@@ -45,7 +45,7 @@ class SecondLayerFeatureEvaluator:
     def evaluate(self, data, target_features, n_jobs = 1):
             
         result = np.zeros((target_features.shape[1], data.shape[1]))
-        print(n_jobs)
+        print(n_jobs, file=sys.stderr)
         if (n_jobs == 1):
             for i in range(target_features.shape[1]):
                 result[i,:] = _evaluate_single(data, target_features[:,i])
@@ -55,7 +55,7 @@ class SecondLayerFeatureEvaluator:
                               max_nbytes=None, pre_dispatch='3*n_jobs')(
                 delayed(_evaluate_single)
                 (data, target_features[:,i]) for i in range(target_features.shape[1]))
-        print('done SLFE')
+        print('done SLFE', file=sys.stderr)
         return(result)
 
 class PredictBasedFCE(BaseEstimator):
@@ -207,13 +207,16 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         learner = self.get_learner(X, y)
         if (not hasattr(learner, 'predict_proba')) and \
             hasattr(learner, 'decision_function'):
-            decision_values = learner.decision_function(self._transform(X))
+            decision_values = self.decision_function(X)
             if (decision_values.ndim > 1):
                 raise("don't know what to do")
             self.df_var = np.var(decision_values)
             self.df_mean = np.mean(decision_values)
-            print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean))
-            
+            print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean), file=sys.stderr)
+
+        # no GP
+        return(self)
+
         classifier_features = self.getClassifierFeatures()
 
         fe = SecondLayerFeatureEvaluator()
@@ -224,7 +227,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         scores = fe.evaluate(local_X, X[:,classifier_features],
                              n_jobs = self.n_jobs)
 
-        print('fitting GPs')
+        print('fitting GPs', file=sys.stderr)
         i = 0
         for feature in classifier_features:
             fc = sklearn.base.clone(
@@ -246,8 +249,15 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         if (hasattr(self.learner, 'predict_proba')):
             return(self.learner.predict_proba(self._transform(X)))
 
+    def predict_log_proba(self, X):
+        if (hasattr(self.learner, 'predict_log_proba')):
+            return(self.learner.predict_log_proba(self._transform(X)))
+
     def decision_function(self, X):
-        return(self.learner.decision_function(self._transform(X)))
+        res = self.learner.decision_function(self._transform(X))
+        if (utilities.check_1d_array(res)):
+            res = res.reshape(-1)
+        return(res)
         
     def setFeatureConfidenceEstimator(self, feature, fc):
         self._FCEs[feature] = fc
@@ -256,6 +266,9 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def getConfidence(self, X, per_feature = False):
         def phi(x): return(0.5 + 0.5 * math.erf(x / math.sqrt(2)))
         def my_score(x): return(abs(phi(x) - phi(-x)))
+
+        # no GP
+        return 1
             
         X = X.view(np.ndarray)
 
@@ -402,7 +415,7 @@ class LinearSVCClassifier(BaseWeakClassifier):
                 high = high * 2
             else:
                 break
-        print('selected C: %g' % (high))
+        print('selected C: %g' % (high), file=sys.stderr)
         return high
     
     def get_learner(self, X, y):
@@ -415,8 +428,8 @@ class LinearSVCClassifier(BaseWeakClassifier):
             self.learner.set_params(C = cs[index])
             self.learner.fit(local_X, y)
             if (len(self.getClassifierFeatures()) > 0):
-                print('training nusvm')
-                print(self.getClassifierFeatures())
+                print('training nusvm', file=sys.stderr)
+                print(self.getClassifierFeatures(), file=sys.stderr)
                 local_cols = abs(self.learner.coef_.flatten()) > 0
                 #print(local_cols[0:50])
                 #print(sum(local_cols))
@@ -424,16 +437,27 @@ class LinearSVCClassifier(BaseWeakClassifier):
                 #print(to_zero[0:50])
                 tmp_X = np.copy(local_X)
                 tmp_X[:,to_zero] = 0
-                self.predictor = sklearn.svm.NuSVC(nu = 0.25,
-                                                   kernel = 'linear',
-                                                   probability = True)
-                self.predictor.fit(tmp_X, y)
+
+                for nu in np.hstack((np.arange(.2, .0, -.05), np.array([.4,.3,.2,.1,.01,.001]))):
+                    try:
+                        self.predictor = sklearn.svm.NuSVC(nu=nu,
+                                        kernel='linear',
+                                        verbose=False,
+                                        probability=True)
+                        self.predictor.fit(tmp_X, y)
+                        break
+                    except Exception as e:
+                        #print(nu, e, file=sys.stderr)
+                        pass
+                    
+                print('nu: ', nu, file=sys.stderr, flush=True)
+                        
                 self.learner = self.predictor
                 #print(self.getClassifierFeatures())
                 #return(self.learner)
                 return(self.predictor)
             index += 1
-            print(index, cs)
+            print(index, cs, file=sys.stderr)
         return(self.learner)
 
     def getClassifierFeatures(self):
@@ -607,30 +631,35 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         return self.classes_[np.argmax(D, axis=1)]
     '''
     def decision_function(self, X, return_details=False, return_iterative=False):
-        global predictions, confidences
+        #global predictions, confidences
         X = X.view(np.ndarray)
 
         if (X.ndim == 1):
             X = X.reshape(1,-1)
 
-        predictions = np.empty((X.shape[0],0), dtype=float)
-        confidences = np.empty((X.shape[0],0), dtype=float)
+        predictions = np.empty((len(self.learners), X.shape[0],2), dtype=float)
+        confidences = np.empty((len(self.learners), X.shape[0]), dtype=float)
         if (return_iterative):
             iterative_result = list()
+           
+        i = 0;
         for l in self.learners:
-            predictions = np.hstack((predictions,
-                                     l.decision_function(X).reshape(-1,1)))
-            confidences = np.hstack((confidences,
-                                     l.getConfidence(X).reshape(-1,1)))
-
+            predictions[i, ] = l.predict_log_proba(X)
+            confidences[i, ] = l.getConfidence(X)
+            i = i + 1;
+            
             if(return_iterative):
                 if (len(iterative_result) > 0):
-                    result = np.average(predictions, weights=confidences, axis=1)
+                    result = np.sum(np.multiply(predictions[0:i,:,1], confidences[0:i,]), axis=0) - \
+                        np.sum(np.multiply(predictions[0:i,:,0], confidences[0:i,]), axis=0)
+                    #result = np.average(predictions[0:i,:,1], weights=confidences[0:i,], axis=0) - \
+                    #    np.average(predictions[0:i,:,0], weights=confidences[0:i,], axis=0)
                 else:
-                    result = predictions
+                    result = (predictions[0:i,:,1] - predictions[0:i, :, 0]).reshape(-1)
                 if (return_details):
                     result = (result, predictions, confidences)
                 iterative_result.append(result)
+
 
         if (return_iterative):
             return iterative_result
@@ -638,7 +667,8 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         if (len(self.learners) > 1):
             #result = predictions[max(enumerate(confidences),key=lambda x: x[1])[0]]
             #result = np.mean(predictions * confidences, axis=1)
-            result = np.average(predictions, weights=confidences, axis=1)
+            result = np.average(predictions[:,:,1], weights=confidences, axis=0) - \
+                np.average(predictions[:,:,0], weights=confidences, axis=0)
         else:
             result = predictions
         if (return_details):
@@ -656,9 +686,9 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 
             for key, value in tmp.items():
                 if key in result:
-                    print('%d already in result set, this is a BUG' % (key))
-                    print(l)
-                    print(result)
+                    print('%d already in result set, this is a BUG' % (key), file=sys.stderr)
+                    print(l, file=sys.stderr)
+                    print(result, file=sys.stderr)
                     return None
                 else:
                     result[key] = value

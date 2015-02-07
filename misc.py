@@ -72,7 +72,7 @@ def get_max_score(scores, prefix = ''):
         return(prefix + ' (count: %d)' % (len(list(scores))), np.median(scores),
                np.std(scores))
         
-def print_scores(scores, prefix = ''):
+def print_scores(scores, prefix = '', output_stream=sys.stderr):
     if (len(scores) == 0):
         return
     #report_max = ['N', 'learner_type']
@@ -89,7 +89,7 @@ def print_scores(scores, prefix = ''):
                 if (prefix != ''):
                     print_scores(value, "%s %s" %(prefix, str(key)))
                 else:
-                    print('\n', key)
+                    print('\n', key, file=output_stream)
                     print_scores(value, "\t")
             return
     else:
@@ -98,7 +98,7 @@ def print_scores(scores, prefix = ''):
                                            2 * np.std(scores))
     for s in ignore_params:
         message = re.sub(" *\('%s.*'\) *" % (s), ' ', message)
-    print(message)
+    print(message, file=output_stream)
         
 def print_log(all_scores, rat_scores = dict()):
     print('=========')

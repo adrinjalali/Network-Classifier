@@ -37,8 +37,8 @@ if __name__ == '__main__':
     bnet_count = -1
     feature_noise = -1
     result_dump_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results'
-    data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
-    #data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
+    #data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
+    data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
         if (sys.argv[i] == '--bnet_count'):
@@ -135,6 +135,7 @@ if __name__ == '__main__':
         rat = Rat(learner_count = max_learner_count,
             learner_type = 'linear svc',
             regularizer_index = ri,
+            feature_cluster_data = train_feature_bnet.reshape(-1),
             n_jobs = cpu_count)
         all_scores[this_method][('regularizer_index', ri)] = dict()
         rat.fit(Xtrain, ytrain)

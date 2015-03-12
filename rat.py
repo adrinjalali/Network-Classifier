@@ -34,7 +34,7 @@ class utilities:
                                               a.shape[1] == 1))))
 
 def _evaluate_single(data, target_feature):
-    mine = MINE(alpha=0.5, c=15)
+    mine = MINE(alpha=0.4, c=15)
     MICs = list()
     for i in range(data.shape[1]):
         mine.compute_score(target_feature,data[:,i])
@@ -201,7 +201,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def _transform(self, X):
         return(utilities.exclude_cols(X, self.excluded_features))
     
-    def fit(self, X, y):
+    def fit(self, X, y, scores = None):
         self._X_colcount = X.shape[1]
         #self.learner.fit(self._transform(X), y)
         learner = self.get_learner(X, y)
@@ -215,7 +215,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean), file=sys.stderr)
 
         # no GP
-        return(self)
+        # return(self)
 
         classifier_features = self.getClassifierFeatures()
 
@@ -224,8 +224,11 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
                                              classifier_features)
         local_X = utilities.exclude_cols(X,
                                          local_excluded_features)
-        scores = fe.evaluate(local_X, X[:,classifier_features],
+        if (scores is None):
+            scores = fe.evaluate(local_X, X[:,classifier_features],
                              n_jobs = self.n_jobs)
+        else:
+            scores = [scores[i][~np.in1d(np.arange(len(scores)), local_excluded_features)] for i in range(len(scores))]
 
         print('fitting GPs', file=sys.stderr)
         i = 0
@@ -268,7 +271,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
         # no GP
-        return 1
+        # return 1
             
         X = X.view(np.ndarray)
 
@@ -522,12 +525,14 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                  learner_type='linear svc',
                  overlapping_features=False,
                  regularizer_index = None,
+                 feature_cluster_data = None,
                  n_jobs = 1):
         
         self.learner_count = learner_count
         self.learner_type = learner_type
         self.overlapping_features = overlapping_features
         self.regularizer_index = regularizer_index
+        self.feature_cluster_data = feature_cluster_data
         self.n_jobs = n_jobs
 
     def get_params(self, deep=True):
@@ -536,6 +541,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             'learner_type':self.learner_type,
             'overlapping_features':self.overlapping_features,
             'regularizer_index':self.regularizer_index,
+            'feature_cluster_data':self.feature_cluster_data,
             'n_jobs':self.n_jobs})
             
     def getSingleLearner(self, X, y):
@@ -549,7 +555,12 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                     l.excluded_features = np.empty(0, dtype=int)
                 else:
                     l.excluded_features = np.copy(self.excluded_features)
-            l.fit(X, y)
+            if (self.feature_cluster_data is not None):
+                scores = [(self.feature_cluster_data == self.feature_cluster_data[i]).astype('int') for i in
+                          range(len(self.feature_cluster_data))]
+            else:
+                scores = None
+            l.fit(X, y, scores)
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)
         print("Tried 5 times to fit a learner, all chose no features.\

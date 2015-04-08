@@ -248,10 +248,14 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def predict_proba(self, X):
         if (hasattr(self.learner, 'predict_proba')):
             return(self.learner.predict_proba(self._transform(X)))
+        else:
+            raise NotImplementedError()
 
     def predict_log_proba(self, X):
         if (hasattr(self.learner, 'predict_log_proba')):
             return(self.learner.predict_log_proba(self._transform(X)))
+        else:
+            raise NotImplementedError()
 
     def decision_function(self, X):
         res = self.learner.decision_function(self._transform(X))
@@ -692,7 +696,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
            
         i = 0
         for l in self.learners:
-            predictions[i, ] = l.predict_log_proba(X)
+            predictions[i, ] = log(l.predict_proba(X))
             confidences[i, ] = l.getConfidence(X)
             i = i + 1
             

@@ -29,10 +29,10 @@ if __name__ == '__main__':
             feature_noise = float(sys.argv[i + 1])
 
     if feature_noise == -1:
-        feature_noise = .3
+        feature_noise = .5
 
     if bnet_count == -1:
-        bnet_count = 10
+        bnet_count = 5
 
     tmp = scipy.io.loadmat('%s/data-bnet_count-%d-feature_noise-%g.mat' % (data_dir, bnet_count, feature_noise))
     Xtrain = tmp['Xtrain']
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     #         all_scores[this_method][('max_depth', md)][('N', ne)] = [scores]
 
     print('ratboost')
-    max_learner_count = 25
+    max_learner_count = 10
     this_method = 'RatBoost'
     all_scores[this_method] = dict()
     rat_models = list()

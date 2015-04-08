@@ -215,7 +215,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean), file=sys.stderr)
 
         # no GP
-        return(self)
+        #return(self)
 
         classifier_features = self.getClassifierFeatures()
 
@@ -268,7 +268,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
         # no GP
-        return 1
+        #return 1
             
         X = X.view(np.ndarray)
 
@@ -320,6 +320,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def set_params(self, **parameters):
         self.__init__(**parameters)
         return(self)
+
 
 class LogisticRegressionClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
@@ -380,6 +381,7 @@ class LogisticRegressionClassifier(BaseWeakClassifier):
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
     '''
+
 
 class LinearSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
@@ -477,6 +479,49 @@ class LinearSVCClassifier(BaseWeakClassifier):
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
 
+
+class GDBClassifier(BaseWeakClassifier):
+    '''
+    Gradient Descent Boosting Classifier
+    '''
+
+    def __init__(self, n_jobs=1,
+                 excluded_features=None,
+                 feature_confidence_estimator=PredictBasedFCE()):
+        learner = sklearn.ensemble.GradientBoostingClassifier(
+                    max_features=10,
+                    max_depth=3,
+                    n_estimators=200)
+        super(GDBClassifier, self).__init__(
+            learner, n_jobs, excluded_features, feature_confidence_estimator)
+
+    def get_params(self, deep=True):
+        return({
+            'excluded_features': self.excluded_features,
+            'feature_confidence_estimator': self.feature_confidence_estimator,
+            'n_jobs': self.n_jobs})
+
+    def get_learner(self, X, y):
+        local_X = self._transform(X)
+        self.learner.fit(local_X, y)
+        return self.learner
+
+    def getClassifierFeatures(self):
+        scores = self.learner.feature_importances_
+        local_cols = np.arange(scores.shape[0])[
+            abs(scores) > 0.80 * np.max(abs(scores))]
+        return(np.delete(np.arange(self._X_colcount),
+                         self.excluded_features)[local_cols])
+
+    def getClassifierFeatureWeights(self):
+        scores = self.learner.feature_importances_
+        local_cols = np.arange(scores.shape[0])[
+            abs(scores) > 0.80 * np.max(abs(scores))]
+        scores = scores[local_cols,]
+        features = self.getClassifierFeatures()
+        return dict([(features[i],scores[i]) for i in range(len(scores))])
+
+
 class NuSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
                  excluded_features=None,
@@ -521,14 +566,15 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                  learner_count=10,
                  learner_type='linear svc',
                  overlapping_features=False,
-                 regularizer_index = None,
-                 n_jobs = 1):
+                 regularizer_index=None,
+                 n_jobs=1):
         
         self.learner_count = learner_count
         self.learner_type = learner_type
         self.overlapping_features = overlapping_features
         self.regularizer_index = regularizer_index
         self.n_jobs = n_jobs
+        self.learner = None
 
     def get_params(self, deep=True):
         return( {
@@ -585,6 +631,8 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                     n_jobs = self.n_jobs)
             elif (self.learner_type == 'nu svc'):
                 self.learner = NuSVCClassifier(n_jobs = self.n_jobs)
+            elif (self.learner_type == 'gdb'):
+                self.learner = GDBClassifier(n_jobs = self.n_jobs)
             else:
                 print("learner_type must be in ('logistic regression',\
                                    'linear svc', 'nu svc')", file=sys.stderr)
@@ -613,12 +661,12 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             
         X = X.view(np.ndarray)
         y = y.view(np.ndarray).squeeze()
-        try:
-            tmp = self.getSingleLearner(X, y)
-        except:
-            print(sys.exc_info(), file=sys.stderr)
-            self.single_learner_failed = True
-            return(self)
+        #try:
+        tmp = self.getSingleLearner(X, y)
+        #except:
+        #    print(sys.exc_info(), file=sys.stderr)
+        #    self.single_learner_failed = True
+        #    return(self)
         self.learners.append(tmp)
         self.excluded_features = np.union1d(
             self.excluded_features, tmp.getAllFeatures())
@@ -642,11 +690,11 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         if (return_iterative):
             iterative_result = list()
            
-        i = 0;
+        i = 0
         for l in self.learners:
             predictions[i, ] = l.predict_log_proba(X)
             confidences[i, ] = l.getConfidence(X)
-            i = i + 1;
+            i = i + 1
             
             if(return_iterative):
                 if (len(iterative_result) > 0):

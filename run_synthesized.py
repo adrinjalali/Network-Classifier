@@ -18,8 +18,8 @@ if __name__ == '__main__':
     bnet_count = -1
     feature_noise = -1
     result_dump_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results'
-    data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
-#    data_dir = 'data-synthesized'
+    #data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
+    data_dir = 'synthesized_results-1'
     # data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
@@ -117,10 +117,11 @@ if __name__ == '__main__':
     this_method = 'RatBoost'
     all_scores[this_method] = dict()
     rat_models = list()
-    for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+    #for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+    for ri in [1]:
         print('------------ ri', ri)
         rat = Rat(learner_count=max_learner_count,
-                  learner_type='linear svc',
+                  learner_type='gdb',
                   regularizer_index=ri,
                   n_jobs=cpu_count)
         all_scores[this_method][('regularizer_index', ri)] = dict()

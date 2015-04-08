@@ -27,7 +27,7 @@ from joblib import Parallel, delayed, logger
 import pickle
 import re
 
-from constants import *;
+from constants import *
 from rat import *
 
 def read_csv(file_name, skip_header, delimiter = '\t'):

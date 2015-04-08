@@ -115,7 +115,10 @@ test_feature_bnet = tmp['test_feature_bnet']
 model = pyGPs.GPR()
 #k = pyGPs.cov.RBFard(log_ell_list=[0.05,0.17], log_sigma=1.)
 k = pyGPs.cov.RBFard(D=1030)#D = Xtrain.shape[1], log_sigma = 0)
-model.setPrior(kernel=k)
+mean = pyGPs.mean.Const(0)
+model.setPrior(kernel=k, mean = mean)
+model.optimize(Xtrain[:,1:], Xtrain[:,0])
+np.hstack((np.hstack(model.predict(Xtrain[1:40,1:])[0:2]), Xtrain[1:40,0:1]))
 
 model.setData(Xtrain[:,1:], Xtrain[:,0])
 #model.plotData_2d(x1,x2,t1,t2,p1,p2)

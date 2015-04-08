@@ -215,7 +215,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean), file=sys.stderr)
 
         # no GP
-        #return(self)
+        return(self)
 
         classifier_features = self.getClassifierFeatures()
 
@@ -272,7 +272,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
         # no GP
-        #return 1
+        return 1
             
         X = X.view(np.ndarray)
 

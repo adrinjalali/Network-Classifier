@@ -696,7 +696,7 @@ class Rat(BaseEstimator, LinearClassifierMixin):
            
         i = 0
         for l in self.learners:
-            predictions[i, ] = log(l.predict_proba(X))
+            predictions[i, ] = np.log(l.predict_proba(X))
             confidences[i, ] = l.getConfidence(X)
             i = i + 1
             

@@ -15,14 +15,14 @@ def add_to_scores(params):
 
 
 if __name__ == '__main__':
+    print('debugging')
     bnet_count = -1
     feature_noise = -1
-    result_dump_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results'
-    #data_dir = '/TL/stat_learn/work/ajalali/Network-Classifier/synthesized_results-1'
-    data_dir = 'synthesized_results-1'
-    # data_dir = '/TL/stat_learn/work/ajalali/bayesnet'
+    working_dir = ''
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
+        if (sys.argv[i] == '--working-dir'):
+            working_dir = sys.argv[i + 1]
         if sys.argv[i] == '--bnet_count':
             bnet_count = int(sys.argv[i + 1])
         if (sys.argv[i] == '--feature_noise'):
@@ -33,6 +33,13 @@ if __name__ == '__main__':
 
     if bnet_count == -1:
         bnet_count = 5
+        
+    if working_dir == '':
+        working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_26_may_2015/synthesized'
+
+    data_dir = working_dir
+    result_dump_dir = working_dir + '/results'        
+
 
     tmp = scipy.io.loadmat('%s/data-bnet_count-%d-feature_noise-%g.mat' % (data_dir, bnet_count, feature_noise))
     Xtrain = tmp['Xtrain']
@@ -43,8 +50,9 @@ if __name__ == '__main__':
     test_feature_noise = tmp['test_feature_noise']
     train_feature_bnet = tmp['train_feature_bnet']
     test_feature_bnet = tmp['test_feature_bnet']
+    print('data loaded')
 
-    cpu_count = 50
+    cpu_count = 10
 
     # cvs = list(cv.StratifiedShuffleSplit(y, n_iter = 100, test_size = 0.2))
 
@@ -97,31 +105,31 @@ if __name__ == '__main__':
                 all_scores[this_method][('max_features', mf)] \
                     [('max_depth', md)][('N', ne)] = [scores]
 
-    # print('adaboost')
-    # for md in np.arange(3) + 1:
-    #     for ne in [5, 20, 50, 100, 200]:
-    #         machine = sklearn.ensemble.AdaBoostClassifier(
-    #             sklearn.tree.DecisionTreeClassifier(max_depth=md),
-    #             algorithm="SAMME.R",
-    #             n_estimators=ne)
-    #         machine.fit(Xtrain, ytrain)
-    #         scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-    #         print(scores)
-    #         this_method = 'Adaboost'
-    #         add_to_scores([this_method, ('max_depth', md),
-    #                        ('N', ne)])
-    #         all_scores[this_method][('max_depth', md)][('N', ne)] = [scores]
+    print('adaboost')
+    for md in np.arange(3) + 1:
+        for ne in [5, 20, 50, 100, 200]:
+            machine = sklearn.ensemble.AdaBoostClassifier(
+                sklearn.tree.DecisionTreeClassifier(max_depth=md),
+                algorithm="SAMME.R",
+                n_estimators=ne)
+            machine.fit(Xtrain, ytrain)
+            scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+            print(scores)
+            this_method = 'Adaboost'
+            add_to_scores([this_method, ('max_depth', md),
+                           ('N', ne)])
+            all_scores[this_method][('max_depth', md)][('N', ne)] = [scores]
 
     print('ratboost')
     max_learner_count = 10
     this_method = 'RatBoost'
     all_scores[this_method] = dict()
     rat_models = list()
-    #for ri in np.hstack((1, np.array(list(range(10))) * 2)):
-    for ri in [1]:
+    for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+    #for ri in [1]:
         print('------------ ri', ri)
         rat = Rat(learner_count=max_learner_count,
-                  learner_type='gdb',
+                  learner_type='linear svc',
                   regularizer_index=ri,
                   n_jobs=cpu_count)
         all_scores[this_method][('regularizer_index', ri)] = dict()
@@ -138,8 +146,8 @@ if __name__ == '__main__':
             all_scores[this_method][('regularizer_index', ri)] \
                 [('N', i)] = [scores]
 
-    # pickle.dump(all_scores, open('%s/scores-bnet_count-%d-feature_noise-%g.pickled' %
-    #                              (result_dump_dir, bnet_count, feature_noise), 'wb'))
+    pickle.dump(all_scores, open('%s/scores-bnet_count-%d-feature_noise-%g.pickled' %
+                                 (result_dump_dir, bnet_count, feature_noise), 'wb'))
 
 
 def check_results(result_dump_dir):

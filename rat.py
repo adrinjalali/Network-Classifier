@@ -34,12 +34,14 @@ class utilities:
                                               a.shape[1] == 1))))
 
 def _evaluate_single(data, target_feature):
-    mine = MINE(alpha=0.5, c=15)
+    mine = MINE(alpha=0.35, c=15)
     MICs = list()
     for i in range(data.shape[1]):
         mine.compute_score(target_feature,data[:,i])
         MICs.append(mine.mic())
     return(MICs)
+
+
 class SecondLayerFeatureEvaluator:
         
     def evaluate(self, data, target_features, n_jobs = 1):
@@ -215,7 +217,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean), file=sys.stderr)
 
         # no GP
-        return(self)
+        #return(self)
 
         classifier_features = self.getClassifierFeatures()
 
@@ -272,7 +274,7 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
         # no GP
-        return 1
+        #return 1
             
         X = X.view(np.ndarray)
 

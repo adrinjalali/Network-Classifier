@@ -56,6 +56,8 @@ def get_scores(root_dir):
     all_scores = dict()
 
     for data in datas:
+        if data == 'synthesized':
+            continue
         print(data)
         targets = os.listdir(root_dir + '/' + data)
         targets = [name for name in targets if os.path.isdir(
@@ -377,7 +379,7 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_18_dec_2014/"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_26_may_2015/"
 
     all_scores = get_scores(root_dir)
 

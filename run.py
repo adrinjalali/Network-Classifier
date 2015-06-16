@@ -232,7 +232,7 @@ if __name__ == '__main__':
     ratboost_nu_svc
     ''' 
     log('ratboost')
-    max_learner_count = 25
+    max_learner_count = 15
     this_method = 'RatBoost'
     all_scores[this_method] = dict()
     rat_models = list()
@@ -262,14 +262,14 @@ if __name__ == '__main__':
         print_scores(all_scores)
         
         dump_scores(score_dump_file, all_scores)
-        #model_structure = [{f : (l.getClassifierFeatureWeights()[f],
-        #        l._FCEs[f].getFeatures())
-        #        for f in l.getClassifierFeatures()}
-        #        for l in rat.learners]
-        #model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
-        #    (method, cv_index, ri, str(uuid.uuid1()))
-        #pickle.dump(model_structure,
-        #    open(model_dump_file, 'wb'))
+        model_structure = [{f : (l.getClassifierFeatureWeights()[f],
+                l._FCEs[f].getFeatures())
+                for f in l.getClassifierFeatures()}
+                for l in rat.learners]
+        model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
+            (method, cv_index, ri, str(uuid.uuid1()))
+        pickle.dump(model_structure,
+            open(model_dump_file, 'wb'))
 
     
     print('bye', file=sys.stderr)

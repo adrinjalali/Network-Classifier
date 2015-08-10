@@ -3,9 +3,9 @@
 
 process_problem(){
     echo $1 $2 $3
-    rm  $1/$2/$3/results/*nogp*
-    #rm  $1/$2/$3/results/*
-    #rm  $1/$2/$3/models/*
+    #rm  $1/$2/$3/results/*nogp*
+    rm  $1/$2/$3/results/*
+    rm  $1/$2/$3/models/*
 }
 
 #process_problem $1 vantveer prognosis

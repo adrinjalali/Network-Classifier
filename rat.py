@@ -34,7 +34,7 @@ class utilities:
 
 
 def _evaluate_single(data, target_feature):
-    mine = MINE(alpha=0.4, c=10)
+    mine = MINE(alpha=0.4, c=15)
     MICs = list()
     for i in range(data.shape[1]):
         mine.compute_score(target_feature,data[:,i])
@@ -66,8 +66,8 @@ class PredictBasedFCE(BaseEstimator):
     calculate the confidence.
     '''
     def __init__(self, feature_count=5):
-        self._learner = gp.GaussianProcess(nugget=1e-2)
-        #self._learner = gp.GaussianProcess(nugget=1e-1, optimizer='welch', random_start = 10)
+        #self._learner = gp.GaussianProcess(nugget=1e-2)
+        self._learner = gp.GaussianProcess(nugget=1e-1, optimizer='Welch', random_start = 10)
         #self._learner = gp.GaussianProcess(theta0=1e-2, thetaL=1e-4,
         #                                   thetaU=1e-1, optimizer='Welch')
         self.feature_count = feature_count

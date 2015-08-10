@@ -38,7 +38,7 @@ if __name__ == '__main__':
     print('hi', file=sys.stderr);
 
     working_dir = ''
-    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_29_sep_2014/TCGA-UCEC/vital_status/'
+    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_06_30/Data/TCGA-LGG/tumor_status'
     #working_dir = 'scratch/TL/pool0/ajalali/ratboost/data_18_dec_2014//TCGA-THCA/ajcc_pathologic_tumor_stage'
     method = ''
     #method = 'ratboost_linear_svc'

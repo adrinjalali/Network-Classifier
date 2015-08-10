@@ -136,8 +136,10 @@ if __name__ == '__main__':
     max_learner_count = 25
     rat_scores = dict()
     all_scores = defaultdict(list)
+    score_dump_file = working_dir + '/results/%s-%d-%s.dmp' % \
+                (method, cv_index, str(uuid.uuid1()))
 
-    if (method == 'all'):
+    if (method == 'all' or method == 'others'):
 
         log('svms')
         for nu in np.arange(7) * 0.1 + 0.05:
@@ -221,56 +223,84 @@ if __name__ == '__main__':
         log()
         print_scores(all_scores)
 
-        dump_scores(working_dir + '/results/%s-%d-others-%s.dmp' % \
-                    (method, cv_index, str(uuid.uuid1())),
-                    all_scores)
+        dump_scores(score_dump_file, all_scores)
         
     '''
     method should be one of:
     ratboost_logistic_regression
     ratboost_linear_svc
     ratboost_nu_svc
-    ''' 
-    log('ratboost')
-    max_learner_count = 15
-    this_method = 'RatBoost'
-    all_scores[this_method] = dict()
-    rat_models = list()
-    score_dump_file = working_dir + '/results/%s-%d-rat-%s.dmp' % \
-                (method, cv_index, str(uuid.uuid1()))
-    for ri in np.hstack((1, np.array(list(range(10))) * 2)):
-        log('------------ ri:%g' % (ri))
-        rat = Rat(learner_count = max_learner_count,
-            learner_type = 'linear svc',
-            regularizer_index = ri,
-            n_jobs = cpu_count)
-        all_scores[this_method][('regularizer_index', ri)] = dict()
-        rat.fit(Xtrain, ytrain)
-        #rat_models.append(rat)
-        log('scores')
-        test_decision_values = rat.decision_function(Xtest, return_iterative = True)
-        train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
-        for i in range(len(test_decision_values)):
-            scores = roc_auc_score(ytest, test_decision_values[i])
-            log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
-            log('tst:\t%g' % (scores))
+    '''
+    if (method == 'all' or method == 'rat'):
+        log('ratboost')
+        max_learner_count = 15
+        this_method = 'RatBoost'
+        all_scores[this_method] = dict()
+        rat_models = list()
+        for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+            log('------------ ri:%g' % (ri))
+            rat = Rat(learner_count = max_learner_count,
+                learner_type = 'linear svc',
+                regularizer_index = ri,
+                n_jobs = cpu_count)
+            all_scores[this_method][('regularizer_index', ri)] = dict()
+            rat.fit(Xtrain, ytrain)
+            #rat_models.append(rat)
+            log('scores')
+            test_decision_values = rat.decision_function(Xtest, return_iterative = True)
+            train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
+            for i in range(len(test_decision_values)):
+                scores = roc_auc_score(ytest, test_decision_values[i])
+                log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
+                log('tst:\t%g' % (scores))
 
-            all_scores[this_method][('regularizer_index', ri)]\
-            [('N', i)] = [scores]
+                all_scores[this_method][('regularizer_index', ri)]\
+                    [('N', i)] = [scores]
             
-        log()
-        print_scores(all_scores)
+            log()
+            print_scores(all_scores)
         
-        dump_scores(score_dump_file, all_scores)
-        model_structure = [{f : (l.getClassifierFeatureWeights()[f],
-                l._FCEs[f].getFeatures())
-                for f in l.getClassifierFeatures()}
-                for l in rat.learners]
-        model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
-            (method, cv_index, ri, str(uuid.uuid1()))
-        pickle.dump(model_structure,
-            open(model_dump_file, 'wb'))
+            dump_scores(score_dump_file, all_scores)
+            model_structure = [{f : (l.getClassifierFeatureWeights()[f],
+                    l._FCEs[f].getFeatures())
+                    for f in l.getClassifierFeatures()}
+                    for l in rat.learners]
+            model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
+                (method, cv_index, ri, str(uuid.uuid1()))
+            pickle.dump(model_structure,
+                open(model_dump_file, 'wb'))
 
+    if (method == 'all' or method == 'rat_nogp'):
+        log('ratboost no GP')
+        max_learner_count = 15
+        this_method = 'RatBoost No GP'
+        all_scores[this_method] = dict()
+        rat_models = list()
+        for ri in np.hstack((1, np.array(list(range(10))) * 2)):
+            log('------------ ri:%g' % (ri))
+            rat = Rat(learner_count = max_learner_count,
+                    learner_type = 'linear svc',
+                    regularizer_index = ri,
+                    n_jobs = cpu_count,
+                    noGP = True)
+            all_scores[this_method][('regularizer_index', ri)] = dict()
+            rat.fit(Xtrain, ytrain)
+            #rat_models.append(rat)
+            log('scores')
+            test_decision_values = rat.decision_function(Xtest, return_iterative = True)
+            train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
+            for i in range(len(test_decision_values)):
+                scores = roc_auc_score(ytest, test_decision_values[i])
+                log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
+                log('tst:\t%g' % (scores))
+
+                all_scores[this_method][('regularizer_index', ri)]\
+                    [('N', i)] = [scores]
+            
+            log()
+            print_scores(all_scores)
+            
+            dump_scores(score_dump_file, all_scores)
     
     print('bye', file=sys.stderr)
 

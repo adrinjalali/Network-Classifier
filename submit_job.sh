@@ -5,17 +5,18 @@
 #disable core dumps
 ulimit -c 0
 
-cd /scratch/TL/pool0/ajalali/tmp
+#cd /scratch/TL/pool0/ajalali/tmp
 
 
 #submit_job usage: submit_job working_dir data target method
 submit_job(){
-qsub -cwd -V -N $3-$2-$4 -t 1:100 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=20:: -l mem_free=$5,h_vmem=$5,h_stack=256M /TL/stat_learn/work/ajalali/Network-Classifier/runjob.sh $1/$2/$3 $4
+qsub -cwd -V -N $3-$2-$4 -t 1:100 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=20:: -l mem_free=$5,h_vmem=$5,h_stack=256M runjob.sh $1/$2/$3 $4
 echo $1 $2 $3 $4 $5
 }
 
 run_for_data_all(){
-    submit_job $1 $2 $3 'all' 40G
+    #submit_job $1 $2 $3 'all' 40G
+    submit_job $1 $2 $3 'rat_nogp' 40G
     #submit_job $1 $2 $3 'rat' 40G
 }
 
@@ -54,6 +55,21 @@ run_for_data_all $1 TCGA-BRCA er_status_by_ihc
 run_for_data_all $1 TCGA-BRCA ajcc_pathologic_tumor_stage
 run_for_data_all $1 TCGA-BRCA ajcc_tumor_pathologic_pt
 run_for_data_all $1 TCGA-BRCA ajcc_nodes_pathologic_pn
+
+run_for_data_all $1 TCGA-COAD ajcc_pathologic_tumor_stage
+run_for_data_all $1 TCGA-COAD ajcc_tumor_pathologic_pt
+run_for_data_all $1 TCGA-COAD ajcc_nodes_pathologic_pn
+
+run_for_data_all $1 TCGA-KIRC ajcc_pathologic_tumor_stage
+run_for_data_all $1 TCGA-KIRC ajcc_tumor_pathologic_pt
+run_for_data_all $1 TCGA-KIRC ajcc_nodes_pathologic_pn
+run_for_data_all $1 TCGA-KIRC vital_status
+
+run_for_data_all $1 TCGA-LIHC ajcc_pathologic_tumor_stage
+run_for_data_all $1 TCGA-LIHC ajcc_tumor_pathologic_pt
+run_for_data_all $1 TCGA-LIHC ajcc_nodes_pathologic_pn
+run_for_data_all $1 TCGA-LIHC vital_status
+run_for_data_all $1 TCGA-LIHC tumor_grade
 
 #for RI in 2 4 6 8 10 12 14 16 18
 #do

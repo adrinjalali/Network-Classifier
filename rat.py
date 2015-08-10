@@ -20,7 +20,7 @@ from joblib import Parallel, delayed
 import copy
 import sys
 import math
-
+import scipy
 
 class utilities:
     def exclude_cols(X, cols):
@@ -142,7 +142,7 @@ class PredictBasedFCE(BaseEstimator):
         return(self._learner.predict(my_X))
         
     def getConfidence(self, X):
-        def phi(x): return(0.5 + 0.5 * math.erf(x / math.sqrt(2)))
+        def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
         def my_score(x): return(1 - abs(phi(x) - phi(-x)))
                 
         X = X.view(np.ndarray)
@@ -259,31 +259,38 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         return(self)
 
     def getConfidence(self, X, per_feature = False):
-        def phi(x): return(0.5 + 0.5 * math.erf(x / math.sqrt(2)))
+        def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
         #no GP
         if (hasattr(self, 'noGP') and self.noGP):
-            return np.ones((len(X)))
-            
-        X = X.view(np.ndarray)
+            result = np.ones((len(X)))
+            weight_sum = 1
+        else:
+            X = X.view(np.ndarray)
 
-        if (X.ndim == 1):
-            X = X.reshape(1,-1)
+            if (X.ndim == 1):
+                X = X.reshape(1,-1)
             
-        #res = []
-        #for i in range(len(X)):
-            #result = 1.0
-        result = np.ones(len(X))
-        per_feature_conf = dict()
-        feature_weights = self.getClassifierFeatureWeights()
-        weight_sum = sum(np.abs(list(feature_weights.values())))
-        for key, fc in self._FCEs.items():
-            tmp = fc.getConfidence(X) * abs(feature_weights[key])
-            per_feature_conf[key] = tmp
-            result += tmp
+            result = np.ones(len(X))
+            per_feature_conf = dict()
+            feature_weights = self.getClassifierFeatureWeights()
+            weight_sum = sum(np.abs(list(feature_weights.values())))
+            for key, fc in self._FCEs.items():
+                tmp = fc.getConfidence(X) * abs(feature_weights[key])
+                per_feature_conf[key] = tmp
+                result += tmp
         if (not per_feature):
-            return (result / weight_sum)
+            #return (result / weight_sum)
+            if (hasattr(self.learner, 'predict_proba')):
+                return (result / weight_sum) * \
+                    my_score(np.max(self.predict_proba(X), axis=0))
+            else:
+                decision_value_normalized = \
+                  (self.decision_function(X) - self.df_mean) / \
+                  math.sqrt(self.df_var)
+                return (result / weight_sum) \
+                    * my_score(decision_value_normalized)
         else:
             return dict([(key,value/weight_sum) for key, value in per_feature_conf.items()])
         #res.append(result/weight_sum)

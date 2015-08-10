@@ -3,8 +3,8 @@
 
 process_problem(){
     echo $1 $2 $3
-    #rm  $1/$2/$3/results/*nogp*
-    rm  $1/$2/$3/results/*
+    rm  $1/$2/$3/results/*rat*
+    #rm  $1/$2/$3/results/*
     rm  $1/$2/$3/models/*
 }
 

@@ -2,4 +2,4 @@
 env
 date
 
-python3.3 run.py --working-dir $1 --method $2 --cv-index $SGE_TASK_ID --batch-based
+python3.3 run.py --input-dir $1 --working-dir $2 --method $3 --cv-index $SGE_TASK_ID --batch-based

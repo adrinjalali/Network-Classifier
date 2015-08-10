@@ -1,23 +1,23 @@
 #!/bin/sh
 
-#usage: submit_job root_data_dir
+#usage: submit_job output_root_dir
 
 #disable core dumps
 ulimit -c 0
 
 #cd /scratch/TL/pool0/ajalali/tmp
 
+INPUT_ROOT="/scratch/TL/pool0/ajalali/ratboost/shared/Data"
 
 #submit_job usage: submit_job working_dir data target method
 submit_job(){
-qsub -cwd -V -N $3-$2-$4 -t 1:100 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=20:: -l mem_free=$5,h_vmem=$5,h_stack=256M runjob.sh $1/$2/$3 $4
+qsub -cwd -V -N $3-$2-$4 -t 1:50 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=20:: -l mem_free=$5,h_vmem=$5,h_stack=256M runjob.sh $INPUT_ROOT/$2/$3 $1/$2/$3 $4
 echo $1 $2 $3 $4 $5
 }
 
 run_for_data_all(){
     #submit_job $1 $2 $3 'all' 40G
     #submit_job $1 $2 $3 'others' 10G
-    submit_job $1 $2 $3 'rat_nogp' 40G
     submit_job $1 $2 $3 'rat' 40G
 }
 

@@ -8,6 +8,8 @@ from __future__ import print_function
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model.base import LinearClassifierMixin
+from sklearn.linear_model import Ridge
+import sklearn.kernel_ridge
 import sklearn.base
 from sklearn.linear_model import LogisticRegression
 import sklearn.cross_validation as cv
@@ -40,8 +42,8 @@ def _evaluate_single(data, target_feature):
         mine.compute_score(target_feature,data[:,i])
         MICs.append(mine.mic())
     return(MICs)
+    
 class SecondLayerFeatureEvaluator:
-        
     def evaluate(self, data, target_features, n_jobs = 1):
             
         result = np.zeros((target_features.shape[1], data.shape[1]))
@@ -165,17 +167,115 @@ class PredictBasedFCE(BaseEstimator):
         return(np.delete(np.arange(self._X_colcount),
                          self.excluded_features)[local_cols])
         
+class RidgeBasedFCE(BaseEstimator):
+    ''' This class uses Ridge Regression as the regression
+    algorithm. It then calculates the confidence from the difference
+    between observed and predicted value, and expected variance which
+    is calculated from training data.
+    '''
+    def __init__(self, feature_count=5):
+        self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
+                                                         kernel='linear',
+                                                         gamma=None,
+                                                         degree=3,
+                                                         coef0=1,
+                                                         kernel_params=None)
+        #self._learner = Ridge(alpha=1, copy_X=True, fit_intercept=True,
+        #    normalize=False, solver='lsqr', max_iter=10000)
+        self.feature_count = feature_count
 
+    def get_params(self, deep=True):
+        return({'feature_count' : self.feature_count})
+
+    def set_params(self, **parameters):
+        self.__init__(**parameters)
+        return(self)
+        
+    def fit(self, X, feature, excluded_features):
+        try:
+            feature = int(feature)
+        except Exception:
+            print("feature should be int", file=sys.stderr)
+            raise TypeError("feature should be int")
+
+        if (isinstance(excluded_features, set) or
+            isinstance(excluded_features, list)):
+            excluded_features = np.array(list(excluded_features), dtype=int)
+            
+        if not utilities.check_1d_array(excluded_features):
+            print("excluded features should be 1d ndarray", file=sys.stderr)
+            raise TypeError("excluded features should be 1d ndarray")
+
+        X = X.view(np.ndarray)
+        self._X_colcount = X.shape[1]
+        self.feature = feature
+        self.excluded_features = np.union1d(excluded_features, [feature])
+        my_X = utilities.exclude_cols(X, self.excluded_features)
+
+        cvs = cv.KFold(len(X), 5, shuffle=True)
+        output_errors = np.empty(0)
+        for train, test in cvs:
+            tmp_l = sklearn.clone(self._learner)
+            tmp_l.fit(my_X[train, :], X[train, self.feature])
+            output_errors = np.hstack((output_errors, tmp_l.predict(my_X[test, :]) - X[test, self.feature]))
+            
+        self.error_std = np.std(output_errors)
+        self.error_mean = np.mean(output_errors)
+        
+        self._learner.fit(my_X,
+                          X[:,self.feature])
+
+        '''
+        print('feature:', feature)
+        print('excluded_feature:', self.excluded_features)
+        print('selected cols:', self._selected_features)
+        print('X.shape, my_X.shape:', X.shape, my_X.shape)
+        raise(RuntimeError('gp failed.'))'''
+        self._trained = True
+        return(self)
+        
+    def predict(self, X):
+        X = X.view(np.ndarray)
+        if (X.ndim == 1):
+            X = X.reshape(1, -1)
+            
+        my_X = utilities.exclude_cols(X, self.excluded_features)
+        return(self._learner.predict(my_X))
+        
+    def getConfidence(self, X):
+        def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
+        def my_score(x): return(1 - abs(phi(x) - phi(-x)))
+                
+        X = X.view(np.ndarray)
+        if (X.ndim == 1):
+            X = X.reshape(1, -1)
+        
+        my_X = utilities.exclude_cols(X, self.excluded_features)
+        observed_diff = self._learner.predict(my_X) - X[:, self.feature]
+        
+        return my_score((observed_diff - self.error_mean) / self.error_std)
+
+    def getFeatures(self):
+        if hasattr(self._learner, "coef_"):
+            scores = self._learner.coef_.flatten()
+            local_cols = np.arange(scores.shape[0])[
+                abs(scores) > 0.80 * np.max(np.abs(scores))]        
+            return(np.delete(np.arange(self._X_colcount),
+                            self.excluded_features)[local_cols])
+        else:
+            return []
+        
 class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self):
         pass
         
     def __init__(self, learner, n_jobs = 1,
-                 excluded_features=None, feature_confidence_estimator=None):
+                 excluded_features=None,
+                 feature_confidence_estimator=None):
         self.learner = learner
         self.n_jobs = n_jobs
         self.feature_confidence_estimator = feature_confidence_estimator
-
+        
         if (isinstance(excluded_features, set) or
             isinstance(excluded_features, list)):
             excluded_features = np.array(list(excluded_features), dtype=int)
@@ -215,34 +315,42 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
             self.df_mean = np.mean(decision_values)
             print("df_var, df_mean: %g, %g" % (self.df_var, self.df_mean))
 
-        #no GP
-        if (hasattr(self, 'noGP') and self.noGP):
+        classifier_features = self.getClassifierFeatures()
+        local_excluded_features = np.union1d(self.excluded_features,
+                                classifier_features)
+        local_X = utilities.exclude_cols(X,
+                                local_excluded_features)
+        if isinstance(self.feature_confidence_estimator, PredictBasedFCE):
+            fe = SecondLayerFeatureEvaluator()
+            scores = fe.evaluate(local_X, X[:,classifier_features],
+                                n_jobs = self.n_jobs)
+
+            print('fitting GPs')
+            i = 0
+            for feature in classifier_features:
+                fc = sklearn.base.clone(
+                    self.feature_confidence_estimator).set_params(
+                        **self.feature_confidence_estimator.get_params())
+                fc.fit(X, feature,
+                    scores[i],
+                    local_excluded_features)
+                self.setFeatureConfidenceEstimator(feature, fc)
+                self._second_layer_features = np.union1d(
+                    self._second_layer_features, fc.getFeatures())
+                i += 1
+            return(self)
+        else:
+            for feature in classifier_features:
+                fc = sklearn.base.clone(
+                    self.feature_confidence_estimator).set_params(
+                        **self.feature_confidence_estimator.get_params())
+                fc.fit(X, feature,
+                    local_excluded_features)
+                self.setFeatureConfidenceEstimator(feature, fc)
+                self._second_layer_features = np.union1d(
+                    self._second_layer_features, fc.getFeatures())
             return(self)
             
-        classifier_features = self.getClassifierFeatures()
-
-        fe = SecondLayerFeatureEvaluator()
-        local_excluded_features = np.union1d(self.excluded_features,
-                                             classifier_features)
-        local_X = utilities.exclude_cols(X,
-                                         local_excluded_features)
-        scores = fe.evaluate(local_X, X[:,classifier_features],
-                             n_jobs = self.n_jobs)
-
-        print('fitting GPs')
-        i = 0
-        for feature in classifier_features:
-            fc = sklearn.base.clone(
-                self.feature_confidence_estimator).set_params(
-                    **self.feature_confidence_estimator.get_params())
-            fc.fit(X, feature,
-                   scores[i],
-                   local_excluded_features)
-            self.setFeatureConfidenceEstimator(feature, fc)
-            self._second_layer_features = np.union1d(
-                self._second_layer_features, fc.getFeatures())
-            i += 1
-        return(self)
                     
     def predict(self, X):
         return(self.learner.predict(self._transform(X)))
@@ -258,12 +366,14 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
         self._FCEs[feature] = fc
         return(self)
 
-    def getConfidence(self, X, per_feature = False):
+    def getConfidence(self, X, per_feature = False,
+                      firstLayerConfidence = True,
+                      secondLayerConfidence = True):
         def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
         def my_score(x): return(abs(phi(x) - phi(-x)))
 
-        #no GP
-        if (hasattr(self, 'noGP') and self.noGP):
+        #no SecondLayerConfidence
+        if not secondLayerConfidence:
             result = np.ones((len(X)))
             weight_sum = 1
         else:
@@ -280,9 +390,11 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
                 tmp = fc.getConfidence(X) * abs(feature_weights[key])
                 per_feature_conf[key] = tmp
                 result += tmp
+                
         if (not per_feature):
-            #return (result / weight_sum)
-            if (hasattr(self.learner, 'predict_proba')):
+            if not firstLayerConfidence:
+                return (result / weight_sum)
+            elif (hasattr(self.learner, 'predict_proba')):
                 return (result / weight_sum) * \
                     my_score(np.max(self.predict_proba(X), axis=0))
             else:
@@ -323,66 +435,6 @@ class BaseWeakClassifier(BaseEstimator, ClassifierMixin):
     def set_params(self, **parameters):
         self.__init__(**parameters)
         return(self)
-
-class LogisticRegressionClassifier(BaseWeakClassifier):
-    def __init__(self, n_jobs = 1,
-                 excluded_features=None,
-                 feature_confidence_estimator=PredictBasedFCE(),
-                 regularizer_index = 10):
-        learner = LogisticRegression(penalty = 'l1',
-                                     dual = False,
-                                     fit_intercept = True)
-        self.regularizer_index = regularizer_index
-        super(LogisticRegressionClassifier, self).__init__(
-            learner, n_jobs, excluded_features, feature_confidence_estimator)
-
-    def get_params(self, deep=True):
-        return( {
-            'regularizer_index':self.regularizer_index,
-            'excluded_features':self.excluded_features,
-            'feature_confidence_estimator':self.feature_confidence_estimator,
-            'n_jobs':self.n_jobs})
-
-    def get_learner(self, X, y):
-        local_X = self._transform(X)
-        index = self.regularizer_index
-        cs = sklearn.svm.l1_min_c(local_X, y, loss='log') * np.logspace(0,5)
-        while (index < len(cs)):
-            self.learner.set_params(C = cs[index])
-            self.learner.fit(local_X, y)
-            if (len(self.getClassifierFeatures()) > 0):
-                return(self.learner)
-            index += 1
-            print("index: %d" % (index), file=sys.stderr)
-        return(self.learner)
-    
-    def getClassifierFeatures(self):
-        scores = self.learner.coef_.flatten()
-        local_cols = np.arange(scores.shape[0])[(scores != 0),]
-        return(np.delete(np.arange(self._X_colcount),
-                         self.excluded_features)[local_cols])
-
-    def getClassifierFeatureWeights(self):
-        scores = self.learner.coef_.flatten()
-        scores = scores[(scores != 0),]
-        features = self.getClassifierFeatures()
-        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
-    '''
-    def getClassifierFeatures(self):
-        scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
-        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
-        return(np.delete(np.arange(self._X_colcount),
-                         self.excluded_features)[local_cols])
-
-    def getClassifierFeatureWeights(self):
-        scores = self.learner.coef_.flatten()
-        threshold = (np.max(abs(scores)) - np.min(abs(scores))) * 0.80
-        local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
-        scores = scores[local_cols,]
-        features = self.getClassifierFeatures()
-        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
-    '''
 
 class LinearSVCClassifier(BaseWeakClassifier):
     def __init__(self, n_jobs = 1,
@@ -469,42 +521,6 @@ class LinearSVCClassifier(BaseWeakClassifier):
         features = self.getClassifierFeatures()
         return(dict([(features[i],scores[i]) for i in range(len(scores))]))
 
-class NuSVCClassifier(BaseWeakClassifier):
-    def __init__(self, n_jobs = 1,
-                 excluded_features=None,
-                 feature_confidence_estimator=PredictBasedFCE(feature_count=10)):
-        learner = sklearn.svm.NuSVC(nu = 0.25,
-                                    kernel = 'linear',
-                                    probability = True)
-        super(NuSVCClassifier, self).__init__(
-            learner, n_jobs, excluded_features, feature_confidence_estimator)
-
-    def get_params(self, deep=True):
-        return( {
-            'excluded_features':self.excluded_features,
-            'feature_confidence_estimator':self.feature_confidence_estimator,
-            'n_jobs':self.n_jobs})
-
-    def get_learner(self, X, y):
-        local_X = self._transform(X)
-        self.learner.fit(local_X, y)
-        return(self.learner)
-
-    def getClassifierFeatures(self):
-        scores = self.learner.coef_.flatten()
-        local_cols = np.arange(scores.shape[0])[
-            abs(scores) > 0.80 * np.max(abs(scores))]        
-        return(np.delete(np.arange(self._X_colcount),
-                         self.excluded_features)[local_cols])
-
-    def getClassifierFeatureWeights(self):
-        scores = self.learner.coef_.flatten()
-        local_cols = np.arange(scores.shape[0])[
-            abs(scores) > 0.80 * np.max(abs(scores))]        
-        scores = scores[local_cols,]
-        features = self.getClassifierFeatures()
-        return(dict([(features[i],scores[i]) for i in range(len(scores))]))
-
 class Rat(BaseEstimator, LinearClassifierMixin):
     def __init__(self):
         pass
@@ -514,15 +530,13 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                  learner_type='linear svc',
                  overlapping_features=False,
                  regularizer_index = None,
-                 n_jobs = 1,
-                 noGP = False):
+                 n_jobs = 1):
         
         self.learner_count = learner_count
         self.learner_type = learner_type
         self.overlapping_features = overlapping_features
         self.regularizer_index = regularizer_index
         self.n_jobs = n_jobs
-        self.noGP = noGP
 
     def get_params(self, deep=True):
         return( {
@@ -544,10 +558,6 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 else:
                     l.excluded_features = np.copy(self.excluded_features)
 
-            #no GP
-            if (hasattr(self, 'noGP') and self.noGP):
-                l.noGP = self.noGP
-                
             l.fit(X, y)
             if (len(list(l.getClassifierFeatures())) > 0):
                 return (l)
@@ -570,25 +580,16 @@ class Rat(BaseEstimator, LinearClassifierMixin):
                 print("overlapping_features should be a Boolean.", file=sys.stderr)
                 raise TypeError("overlapping_features should be a Boolean.")
 
-            if (self.learner_type == 'logistic regression'):
-                if (self.regularizer_index == None):
-                    self.regularizer_index = 15
-                self.learner = LogisticRegressionClassifier(
-                    regularizer_index = self.regularizer_index,
-                    n_jobs = self.n_jobs)
-            elif (self.learner_type == 'linear svc'):
+            if (self.learner_type == 'linear svc'):
                 if (self.regularizer_index == None):
                     self.regularizer_index = 15
                 self.learner = LinearSVCClassifier(
+                    feature_confidence_estimator=RidgeBasedFCE(),
                     regularizer_index = self.regularizer_index,
                     n_jobs = self.n_jobs)
-            elif (self.learner_type == 'nu svc'):
-                self.learner = NuSVCClassifier(n_jobs = self.n_jobs)
             else:
-                print("learner_type must be in ('logistic regression',\
-                                   'linear svc', 'nu svc')", file=sys.stderr)
-                raise RuntimeError("learner_type must be in ('logistic regression',\
-                                   'linear svc', 'nu svc')")
+                print("learner_type must be in ('linear svc')", file=sys.stderr)
+                raise RuntimeError("learner_type must be in ('linear svc')")
 
             self.classes_, y = np.unique(y, return_inverse=True)
 
@@ -629,8 +630,12 @@ class Rat(BaseEstimator, LinearClassifierMixin):
         D = self.decision_function(X)
         return self.classes_[np.argmax(D, axis=1)]
     '''
-    def decision_function(self, X, return_details=False, return_iterative=False):
-        global predictions, confidences
+    def decision_function(self, X,
+                          return_details=False,
+                          return_iterative=False,
+                          firstLayerConfidence=True,
+                          secondLayerConfidence=True):
+        #global predictions, confidences
         X = X.view(np.ndarray)
 
         if (X.ndim == 1):
@@ -644,7 +649,9 @@ class Rat(BaseEstimator, LinearClassifierMixin):
             predictions = np.hstack((predictions,
                                      l.decision_function(X).reshape(-1,1)))
             confidences = np.hstack((confidences,
-                                     l.getConfidence(X).reshape(-1,1)))
+                                     l.getConfidence(X,
+                                                     firstLayerConfidence=firstLayerConfidence,
+                                                     secondLayerConfidence=secondLayerConfidence).reshape(-1,1)))
 
             if(return_iterative):
                 if (len(iterative_result) > 0):

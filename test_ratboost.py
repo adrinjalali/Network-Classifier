@@ -158,3 +158,32 @@ values = np.array([mics[i][0] for i in range(len(mics))])
 tmp = np.vstack((np.arange(len(values))[values != 0], values[values != 0]));
 tmp = tmp[:,np.argsort(tmp)[1,]];
 [print('%g, %g' % (tmp[0,i], tmp[1,i])) for i in range(tmp.shape[1])];
+
+
+clf = sklearn.linear_model.Ridge(alpha=100, copy_X=True, fit_intercept=True,
+                                 normalize=True, solver='auto', max_iter=10000)
+
+from sklearn import linear_model
+clf = linear_model.ARDRegression(normalize = False, copy_X = True, verbose = True)
+
+from sklearn.linear_model import SGDRegressor
+clf = SGDRegressor(n_iter=5000)
+
+from sklearn.linear_model import PassiveAggressiveRegressor
+clf = PassiveAggressiveRegressor(n_iter=1000, epsilon=0.01)
+
+import sklearn.linear_model
+clf = sklearn.linear_model.TheilSenRegressor(fit_intercept=True, copy_X=True, max_subpopulation=10000.0, n_subsamples=None, max_iter=1000, tol=0.001, random_state=None, n_jobs=1, verbose=False)
+
+clf = sklearn.linear_model.LinearRegression(fit_intercept=True, normalize=True, copy_X=True, n_jobs=10)
+
+clf = sklearn.linear_model.BayesianRidge(n_iter=300, tol=0.001, alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06, compute_score=False, fit_intercept=True, normalize=False, copy_X=True, verbose=False)
+
+import sklearn
+import sklearn.kernel_ridge
+clf = sklearn.kernel_ridge.KernelRidge(alpha=10, kernel='linear', gamma=None, degree=3, coef0=1, kernel_params=None)
+
+clf.fit(Xtrain[:,1:], Xtrain[:,0])
+print(sum(abs(Xtrain[:,0] - clf.predict(Xtrain[:,1:]))))
+print(sum(abs(Xtest[:,0] - clf.predict(Xtest[:,1:]))))
+print(sum(np.abs(clf.coef_)))

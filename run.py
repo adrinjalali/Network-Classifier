@@ -38,7 +38,8 @@ if __name__ == '__main__':
     print('hi', file=sys.stderr);
 
     working_dir = ''
-    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_07_04/Data/TCGA-LGG/tumor_status'
+    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_07_05/Data/TCGA-LGG/tumor_status'
+    #input_dir = '/scratch/TL/pool0/ajalali/ratboost/shared/Data/TCGA-LGG/tumor_status'
     method = ''
     #method = 'ratboost_linear_svc'
     cv_index = -1
@@ -48,6 +49,8 @@ if __name__ == '__main__':
     batch_based_cv = False
     for i in range(len(sys.argv)):
         print(sys.argv[i], file=sys.stderr)
+        if (sys.argv[i] == '--input-dir'):
+            input_dir = sys.argv[i + 1]
         if (sys.argv[i] == '--working-dir'):
             working_dir = sys.argv[i + 1]
         if (sys.argv[i] == '--method'):
@@ -65,12 +68,12 @@ if __name__ == '__main__':
     print(working_dir, method, cv_index, regularizer_index, cpu_count
           , file=sys.stderr)
     try:
-        os.mkdir(working_dir + '/results')
+        os.makedirs(working_dir + '/results', mode=0o750, exist_ok=True)
     except Exception as e:
         print(e, file=sys.stderr)
 
     try:
-        os.mkdir(working_dir + '/models')
+        os.makedirs(working_dir + '/models', mode=0o750, exist_ok=True)
     except Exception as e:
         print(e, file=sys.stderr)
 
@@ -79,14 +82,14 @@ if __name__ == '__main__':
     log("trying an old input format...")
     data_loaded = False
     try:
-        data_file = np.load(working_dir + '/npdata.npz')
+        data_file = np.load(input_dir + '/npdata.npz')
         X = data_file['tmpX']
         X_prime = data_file['X_prime']
         y = data_file['y']
         sample_annotation = data_file['sample_annotation']
         feature_annotation = data_file['feature_annotation']
-        g = gt.load_graph(working_dir + '/graph.xml.gz')
-        cvs = pickle.load(open(working_dir + '/cvs.dmp', 'rb'))
+        g = gt.load_graph(input_dir + '/graph.xml.gz')
+        cvs = pickle.load(open(input_dir + '/cvs.dmp', 'rb'))
         data_loaded = True
     except Exception as e:
         log(e)
@@ -94,18 +97,18 @@ if __name__ == '__main__':
     if (not data_loaded):
         log("trying another input format...")
         try:
-            data_file = np.load(working_dir + '/data.npz');
+            data_file = np.load(input_dir + '/data.npz');
             X = data_file['X']
             X_prime = data_file['X_prime']
             y = data_file['y']
             sample_annotation = data_file['patient_annot']
-            data_file = np.load(working_dir + '/../genes.npz')
+            data_file = np.load(input_dir + '/../genes.npz')
             feature_annotation = data_file['genes']
-            g = gt.load_graph(working_dir + '/../graph.xml.gz')
+            g = gt.load_graph(input_dir + '/../graph.xml.gz')
             if (batch_based_cv):
-                cvs = pickle.load(open(working_dir + '/batch_cvs.dmp', 'rb'))
+                cvs = pickle.load(open(input_dir + '/batch_cvs.dmp', 'rb'))
             else:
-                cvs = pickle.load(open(working_dir + '/normal_cvs.dmp', 'rb'))
+                cvs = pickle.load(open(input_dir + '/normal_cvs.dmp', 'rb'))
             data_loaded = True
         except Exception as e:
             log(e)
@@ -224,42 +227,58 @@ if __name__ == '__main__':
 
         dump_scores(score_dump_file, all_scores)
         
-    '''
-    method should be one of:
-    ratboost_logistic_regression
-    ratboost_linear_svc
-    ratboost_nu_svc
-    '''
     if (method == 'all' or method == 'rat'):
         log('ratboost')
         max_learner_count = 15
-        this_method = 'RatBoost'
-        all_scores[this_method] = dict()
-        rat_models = list()
+
+        name_params = [('RatBoost No First Layer Confidence',
+                        {'firstLayerConfidence':False,
+                         'secondLayerConfidence':True}),
+                       ('RatBoost No Second Layer Confidence',
+                        {'firstLayerConfidence':True,
+                         'secondLayerConfidence':False}),
+                       ('RatBoost No Confidence',
+                        {'firstLayerConfidence':False,
+                         'secondLayerConfidence':False}),
+                       ('RatBoost Both Confidences',
+                        {'firstLayerConfidence':True,
+                         'secondLayerConfidence':True})]
+                        
         for ri in np.hstack((1, np.array(list(range(10))) * 2)):
             log('------------ ri:%g' % (ri))
             rat = Rat(learner_count = max_learner_count,
                 learner_type = 'linear svc',
                 regularizer_index = ri,
                 n_jobs = cpu_count)
-            all_scores[this_method][('regularizer_index', ri)] = dict()
-            rat.fit(Xtrain, ytrain)
-            #rat_models.append(rat)
-            log('scores')
-            test_decision_values = rat.decision_function(Xtest, return_iterative = True)
-            train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
-            for i in range(len(test_decision_values)):
-                scores = roc_auc_score(ytest, test_decision_values[i])
-                log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
-                log('tst:\t%g' % (scores))
 
-                all_scores[this_method][('regularizer_index', ri)]\
-                    [('N', i)] = [scores]
+            rat.fit(Xtrain, ytrain)
+            
+            log('scores')
+            for item in name_params:
+                this_method = item[0]
+                conf_params = item[1]
+                add_to_scores([this_method, ('regularizer_index', ri)])
+                
+                #rat_models.append(rat)
+                test_decision_values = rat.decision_function(Xtest,
+                                                             return_iterative = True,
+                                                             **conf_params)
+                train_decision_values = rat.decision_function(Xtrain,
+                                                              return_iterative = True,
+                                                              **conf_params)
+                for i in range(len(test_decision_values)):
+                    scores = roc_auc_score(ytest, test_decision_values[i])
+                    log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
+                    log('tst:\t%g' % (scores))
+    
+                    all_scores[this_method][('regularizer_index', ri)]\
+                        [('N', i)] = [scores]
             
             log()
             print_scores(all_scores)
-        
+            
             dump_scores(score_dump_file, all_scores)
+    
             model_structure = [{f : (l.getClassifierFeatureWeights()[f],
                     l._FCEs[f].getFeatures())
                     for f in l.getClassifierFeatures()}
@@ -269,37 +288,5 @@ if __name__ == '__main__':
             pickle.dump(model_structure,
                 open(model_dump_file, 'wb'))
 
-    if (method == 'all' or method == 'rat_nogp'):
-        log('ratboost no GP')
-        max_learner_count = 15
-        this_method = 'RatBoost No GP'
-        all_scores[this_method] = dict()
-        rat_models = list()
-        for ri in np.hstack((1, np.array(list(range(10))) * 2)):
-            log('------------ ri:%g' % (ri))
-            rat = Rat(learner_count = max_learner_count,
-                    learner_type = 'linear svc',
-                    regularizer_index = ri,
-                    n_jobs = cpu_count,
-                    noGP = True)
-            all_scores[this_method][('regularizer_index', ri)] = dict()
-            rat.fit(Xtrain, ytrain)
-            #rat_models.append(rat)
-            log('scores')
-            test_decision_values = rat.decision_function(Xtest, return_iterative = True)
-            train_decision_values = rat.decision_function(Xtrain, return_iterative = True)
-            for i in range(len(test_decision_values)):
-                scores = roc_auc_score(ytest, test_decision_values[i])
-                log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
-                log('tst:\t%g' % (scores))
-
-                all_scores[this_method][('regularizer_index', ri)]\
-                    [('N', i)] = [scores]
-            
-            log()
-            print_scores(all_scores)
-            
-            dump_scores(score_dump_file, all_scores)
-    
     print('bye', file=sys.stderr)
 

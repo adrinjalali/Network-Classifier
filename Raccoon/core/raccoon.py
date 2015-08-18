@@ -8,13 +8,17 @@ from . import FCE
 
 
 class Raccoon:
-    def __init__(self, verbose=0):
+    def __init__(self, verbose=0, logger=None):
         self.features = None
         self.FCEs = dict()
         self.verbose = verbose
         self.Xtrain = None
         self.ytrain = None
         self.normalizer = None
+        if logger == None:
+            self.logger = print
+        else:
+            self.logger = logger
 
     def fit(self, X, y):
         normalizer = sklearn.preprocessing.Normalizer().fit(X)
@@ -24,29 +28,33 @@ class Raccoon:
         self.ytrain = y
 
         if self.verbose > 0:
-            print("Selecting candidate features for feature pool")
+            self.logger("Selecting candidate features for feature pool")
 
         # calculate pearson correlation and respective p-values
         # select the ones with a p-value < 0.05
         tmp = [scipy.stats.stats.pearsonr(y, X[:, i]) for i in range(X.shape[1])]
         tmp = np.array(tmp)
-        self.features = np.arange(tmp.shape[0])[abs(tmp[:, 1]) < 0.01]
+        threshold_500 = np.sort(tmp[:, 1])[500]
+        threshold = min(threshold_500, 0.05)
+        self.features = np.arange(tmp.shape[0])[abs(tmp[:, 1]) < threshold]
+        if self.verbose > 0:
+            self.logger("threshold 500, threshold: %g %g" % (threshold_500, threshold))
 
         if self.verbose > 0:
-            print(len(self.features), "features selected.\nFitting feature confidence estimators")
+            self.logger("%d features selected. Fitting feature confidence estimators" % (len(self.features)))
 
         self.FCEs = dict()
         i = 0
         for f in self.features:
             i += 1
             if self.verbose > 1:
-                print(i, "/", self.features.shape[0], "fitting FCE for feature", f)
-            fce = FCE.RidgeBasedFCE()
+                self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
+            fce = FCE.RidgeBasedFCE(self.logger)
             fce.fit(X, f)
             self.FCEs[f] = fce
 
         if self.verbose > 0:
-            print("Done.")
+            self.logger("Done.")
 
     def predict(self, X, model=sklearn.svm.SVC(), param_dist=None):
         X = X.view(np.ndarray)
@@ -58,21 +66,21 @@ class Raccoon:
         results = list()
         for i in range(X.shape[0]):
             if self.verbose > 0:
-                print("Sample", i+1, "/", X.shape[0])
+                self.logger("Sample %d / %d" % (i+1, X.shape[0]))
 
             if self.verbose > 0:
-                print("Selecting high confidence features")
+                self.logger("Selecting high confidence features")
 
             confidences = {f: self.FCEs[f].getConfidence(X[i, ]) for f in self.features}
 
             if self.verbose > 2:
-                print(confidences)
+                self.logger(confidences)
 
             max_confidence = max(confidences.values())
             min_confidence = min(confidences.values())
 
             if self.verbose > 1:
-                print("Max and min confidences:", max_confidence, min_confidence)
+                self.logger("Max and min confidences: %f, %f" % (max_confidence, min_confidence))
 
             best_threshold = None
             best_score = 0
@@ -81,31 +89,33 @@ class Raccoon:
                                      if value > min_confidence + (max_confidence - min_confidence) * threshold]
 
                 if self.verbose > 2:
-                    print("Selected features and their confidences:")
-                    print([(key, confidences[key]) for key in selected_features])
+                    self.logger("Selected features and their confidences:")
+                    self.logger([(key, confidences[key]) for key in selected_features])
 
                 random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                                       n_iter=100, n_jobs=-1, cv=10)
+                                                                       n_iter=100, n_jobs=1, cv=10,
+                                                                       verbose=0)
                 random_search.fit(self.Xtrain[:, selected_features], self.ytrain)
                 if random_search.best_score_ > best_score:
                     best_score = random_search.best_score_
                     best_threshold = threshold
 
                 if self.verbose > 0:
-                    print("score, threshold:", random_search.best_score_, threshold)
+                    self.logger("score, threshold: %f, %g" % (random_search.best_score_, threshold))
 
             if self.verbose > 1:
-                print("Selected threshold:", best_threshold)
+                self.logger("Selected threshold: %g" % (best_threshold))
 
             selected_features = [key for (key, value) in confidences.items()
                                  if value > min_confidence + (max_confidence - min_confidence) * best_threshold]
 
             if self.verbose > 2:
-                print("Selected features and their confidences:")
-                print([(key, confidences[key]) for key in selected_features])
+                self.logger("Selected features and their confidences:")
+                self.logger([(key, confidences[key]) for key in selected_features])
 
             random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                                   n_iter=100, n_jobs=-1, cv=10)
+                                                                   n_iter=100, n_jobs=1, cv=10,
+                                                                   verbose=0)
             random_search.fit(self.Xtrain[:, selected_features], self.ytrain)
 
             results.append({'model': random_search, 'confidences': confidences,

@@ -18,7 +18,8 @@ echo $1 $2 $3 $4 $5
 run_for_data_all(){
     #submit_job $1 $2 $3 'all' 40G
     #submit_job $1 $2 $3 'others' 10G
-    submit_job $1 $2 $3 'rat' 40G
+    #submit_job $1 $2 $3 'rat' 40G
+    submit_job $1 $2 $3 'raccoon' 20G
 }
 
 #run_for_data usage: run_for_data working_dir data target regularizer_index

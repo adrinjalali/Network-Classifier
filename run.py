@@ -8,6 +8,7 @@ from graph_tool import stats;
 from sklearn import svm;
 from sklearn import cross_validation as cv;
 from sklearn.metrics import roc_auc_score;
+import sklearn.metrics
 from sklearn.grid_search import GridSearchCV
 import sklearn.ensemble
 import sklearn.tree
@@ -17,6 +18,7 @@ from joblib import Parallel, delayed, logger
 import pickle
 import uuid
 import re
+import Raccoon.core.raccoon
 
 
 from constants import *;
@@ -130,10 +132,10 @@ if __name__ == '__main__':
     X_prime_test = X_prime[cvs[0][1],]
     ytest = y[cvs[0][1],]
 
-    if (np.unique(ytest).shape[0] < 2):
-        log('ytest has only one value:%s' % (ytest))
-        log('exiting')
-        sys.exit(1)
+    #if (np.unique(ytest).shape[0] < 2):
+    #    log('ytest has only one value:%s' % (ytest))
+    #    log('exiting')
+    #    sys.exit(1)
     
     max_learner_count = 25
     rat_scores = dict()
@@ -151,7 +153,8 @@ if __name__ == '__main__':
                                 verbose=False,
                                 probability=False)
                 machine.fit(Xtrain, ytrain)
-                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
                 log('lsvm\tnu:%g\t%s' % (nu, scores))
                 this_method = 'SVM, linear kernel'
                 add_to_scores([this_method, ('nu', nu)])
@@ -166,7 +169,8 @@ if __name__ == '__main__':
                                 verbose=False,
                                 probability=False) 
                 machine.fit(Xtrain, ytrain)
-                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
                 log('gsvm\tnu:%g\t%s' % (nu, scores))
                 this_method = 'SVM, RBF kernel'
                 add_to_scores([this_method, ('nu', nu)])
@@ -181,7 +185,8 @@ if __name__ == '__main__':
                                 verbose=False,
                                 probability=False)
                 machine.fit(Xtrain, ytrain)
-                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
                 log('lsvm`\tnu:%g\t%s' % (nu, scores))
                 this_method = 'SVM, linear kernel'
                 add_to_scores([this_method, ('nu', nu)])
@@ -199,7 +204,8 @@ if __name__ == '__main__':
                         max_depth = md,
                         n_estimators = ne)
                     machine.fit(Xtrain, ytrain)
-                    scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                    scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+                    #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
                     log('gbc\tmf:%d\tmd:%d\tne:%d\t%s' % (mf, md, ne, scores))
                     this_method = 'Gradient Boosting Classifier'
                     add_to_scores([this_method, ('max_features', mf),
@@ -215,7 +221,8 @@ if __name__ == '__main__':
                     algorithm = "SAMME.R",
                     n_estimators = ne)
                 machine.fit(Xtrain, ytrain)
-                scores = roc_auc_score(ytest, machine.decision_function(Xtest))
+                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
                 log('adb\tmd:%d\tne:%d\t%s' % (md, ne, scores))
                 this_method = 'Adaboost'
                 add_to_scores([this_method, ('max_depth', md),
@@ -267,7 +274,8 @@ if __name__ == '__main__':
                                                               return_iterative = True,
                                                               **conf_params)
                 for i in range(len(test_decision_values)):
-                    scores = roc_auc_score(ytest, test_decision_values[i])
+                    scores = sklearn.metrics.average_precision_score(ytest, test_decision_values[i])
+                    #scores = roc_auc_score(ytest, test_decision_values[i])
                     log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
                     log('tst:\t%g' % (scores))
     
@@ -288,5 +296,26 @@ if __name__ == '__main__':
             pickle.dump(model_structure,
                 open(model_dump_file, 'wb'))
 
+    if (method == 'all' or method == 'raccoon'):
+        log('raccoon')
+        import sklearn.svm
+        model = Raccoon.core.raccoon.Raccoon(verbose=3, logger=log)
+        model.fit(Xtrain, ytrain)
+        predictor = sklearn.svm.SVC()
+        param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
+                      'kernel': ['linear', 'rbf']}
+        #tmpt = model.predict(Xtrain, model=predictor, param_dist=param_dist)
+        test_results = model.predict(Xtest, model=predictor, param_dist=param_dist)
+        scores = sklearn.metrics.average_precision_score(ytest, [k['decision_function'][0] for k in test_results])
+        
+        log('raccoon\t%s' % (scores))
+        this_method = 'Raccoon'
+        all_scores[this_method] = [scores]
+
+        log()
+        print_scores(all_scores)
+
+        dump_scores(score_dump_file, all_scores)
+        
     print('bye', file=sys.stderr)
 

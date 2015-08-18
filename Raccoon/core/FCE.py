@@ -1,6 +1,7 @@
 # FCE: feature confidence extimator
 import sklearn
 import sklearn.kernel_ridge
+import sklearn.svm
 import numpy as np
 import sklearn.cross_validation as cv
 from sklearn.base import BaseEstimator
@@ -16,23 +17,28 @@ class RidgeBasedFCE(BaseEstimator):
     is calculated from training data.
     """
 
-    def __init__(self):
+    def __init__(self, logger=None):
         self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
                                                          kernel='linear',
                                                          gamma=None,
                                                          degree=3,
                                                          coef0=1,
                                                          kernel_params=None)
+        #self._learner = sklearn.svm.SVR(C=0.1, kernel='linear')
         self.feature = None
         self.error_mean = None
         self.error_std = None
         self.input_col_count = None
+        if logger == None:
+            self.logger = print
+        else:
+            self.logger = logger
 
     def fit(self, X, feature):
         try:
             feature = int(feature)
         except Exception:
-            print("feature should be int", file=sys.stderr)
+            self.logger("feature should be int")
             raise TypeError("feature should be int")
 
         X = X.view(np.ndarray)

@@ -65,7 +65,6 @@ if __name__ == '__main__':
             batch_based_cv = True
         if (sys.argv[i] == '--cpu-count'):
             cpu_count = int(sys.argv[i + 1])
-    
 
     print(working_dir, method, cv_index, regularizer_index, cpu_count
           , file=sys.stderr)
@@ -143,120 +142,70 @@ if __name__ == '__main__':
     score_dump_file = working_dir + '/results/%s-%d-%s.dmp' % \
                 (method, cv_index, str(uuid.uuid1()))
 
-    if (method == 'all' or method == 'others'):
+    if method == 'all' or method == 'others':
 
         log('svms')
-        for nu in np.arange(7) * 0.1 + 0.05:
-            try:
-                machine = svm.NuSVC(nu=nu,
-                                kernel='linear',
-                                verbose=False,
-                                probability=False)
-                machine.fit(Xtrain, ytrain)
-                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
-                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-                log('lsvm\tnu:%g\t%s' % (nu, scores))
-                this_method = 'SVM, linear kernel'
-                add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = [scores]
-            except ValueError as e:
-                log('nu:%g\t%s' % (nu, e))
-            
+        model = svm.NuSVC(verbose=False,
+                          probability=False)
+        params = {'kernel': ['linear', 'rbf'],
+                  'nu': np.arange(7) * 0.1 + 0.05}
+        machine = sklearn.grid_search.GridSearchCV(estimator=model,
+                                                   param_grid=params)
+        machine.fit(Xtrain, ytrain)
+        scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+        log('svm\t%s' % scores)
+        this_method = 'SVM'
+        all_scores[this_method] = [scores]
 
-            try:
-                machine = svm.NuSVC(nu=nu,
-                                kernel='rbf',
-                                verbose=False,
-                                probability=False) 
-                machine.fit(Xtrain, ytrain)
-                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
-                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-                log('gsvm\tnu:%g\t%s' % (nu, scores))
-                this_method = 'SVM, RBF kernel'
-                add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = [scores]
-            except ValueError as e:
-                log('nu:%g\t%s' % (nu, e))
-            
-        for nu in np.arange(7) * 0.1 + 0.05:
-            try:
-                machine = svm.NuSVC(nu=nu,
-                                kernel='linear',
-                                verbose=False,
-                                probability=False)
-                machine.fit(Xtrain, ytrain)
-                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
-                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-                log('lsvm`\tnu:%g\t%s' % (nu, scores))
-                this_method = 'SVM, linear kernel'
-                add_to_scores([this_method, ('nu', nu)])
-                all_scores[this_method][('nu', nu)] = [scores]
-            except ValueError as e:
-                log('nu:%g\t%s' % (nu, e))
-            
-                
         log('gbc')
-        for mf in np.arange(3) * 5 + 5:
-            for md in np.arange(3) + 1:
-                for ne in [5, 20, 50, 100, 200]:
-                    machine = sklearn.ensemble.GradientBoostingClassifier(
-                        max_features = mf,
-                        max_depth = md,
-                        n_estimators = ne)
-                    machine.fit(Xtrain, ytrain)
-                    scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
-                    #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-                    log('gbc\tmf:%d\tmd:%d\tne:%d\t%s' % (mf, md, ne, scores))
-                    this_method = 'Gradient Boosting Classifier'
-                    add_to_scores([this_method, ('max_features', mf),
-                           ('max_depth', md), ('N', ne)])
-                    all_scores[this_method][('max_features', mf)] \
-                        [('max_depth', md)][('N', ne)] = [scores]
+        params = {'max_features': np.arange(3) * 5 + 5,
+                  'max_depth': np.arange(3) + 1,
+                  'n_estimators': [5, 20, 50, 100, 200]}
+        model = sklearn.ensemble.GradientBoostingClassifier()
+        machine = sklearn.grid_search.GridSearchCV(estimator=model,
+                                                   param_grid=params)
+        machine.fit(Xtrain, ytrain)
+        scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+        log('gbc\t%s' % scores)
+        this_method = 'Gradient Boosting Classifier'
+        all_scores[this_method] = [scores]
 
         log('adaboost')
-        for md in np.arange(3) + 1:
-            for ne in [5, 20, 50, 100, 200]:
-                machine = sklearn.ensemble.AdaBoostClassifier(
-                    sklearn.tree.DecisionTreeClassifier(max_depth=md),
-                    algorithm = "SAMME.R",
-                    n_estimators = ne)
-                machine.fit(Xtrain, ytrain)
-                scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
-                #scores = roc_auc_score(ytest, machine.decision_function(Xtest))
-                log('adb\tmd:%d\tne:%d\t%s' % (md, ne, scores))
-                this_method = 'Adaboost'
-                add_to_scores([this_method, ('max_depth', md),
-                               ('N', ne)])
-                all_scores[this_method][('max_depth', md)][('N', ne)] = [scores]
+        params = {'base_estimator': [sklearn.tree.DecisionTreeClassifier(max_depth=1),
+                                     sklearn.tree.DecisionTreeClassifier(max_depth=2),
+                                     sklearn.tree.DecisionTreeClassifier(max_depth=3)],
+                  'n_estimators': [5, 20, 50, 100, 200]}
+        model = sklearn.ensemble.AdaBoostClassifier(algorithm="SAMME.R")
+        machine = sklearn.grid_search.GridSearchCV(estimator=model,
+                                                   param_grid=params)
+        machine.fit(Xtrain, ytrain)
+        scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
+        log('adb\t%s' % scores)
+        this_method = 'Adaboost'
+        all_scores[this_method] = [scores]
 
         log()
         print_scores(all_scores)
 
         dump_scores(score_dump_file, all_scores)
         
-    if (method == 'all' or method == 'rat'):
+    if method == 'all' or method == 'rat':
         log('ratboost')
         max_learner_count = 15
 
         name_params = [('RatBoost No First Layer Confidence',
                         {'firstLayerConfidence':False,
                          'secondLayerConfidence':True}),
-                       ('RatBoost No Second Layer Confidence',
-                        {'firstLayerConfidence':True,
-                         'secondLayerConfidence':False}),
                        ('RatBoost No Confidence',
                         {'firstLayerConfidence':False,
-                         'secondLayerConfidence':False}),
-                       ('RatBoost Both Confidences',
-                        {'firstLayerConfidence':True,
-                         'secondLayerConfidence':True})]
-                        
+                         'secondLayerConfidence':False})]
+
         for ri in np.hstack((1, np.array(list(range(10))) * 2)):
             log('------------ ri:%g' % (ri))
-            rat = Rat(learner_count = max_learner_count,
-                learner_type = 'linear svc',
-                regularizer_index = ri,
-                n_jobs = cpu_count)
+            rat = Rat(learner_count=max_learner_count,
+                learner_type='linear svc',
+                regularizer_index=ri,
+                n_jobs=cpu_count)
 
             rat.fit(Xtrain, ytrain)
             
@@ -266,7 +215,6 @@ if __name__ == '__main__':
                 conf_params = item[1]
                 add_to_scores([this_method, ('regularizer_index', ri)])
                 
-                #rat_models.append(rat)
                 test_decision_values = rat.decision_function(Xtest,
                                                              return_iterative = True,
                                                              **conf_params)
@@ -275,7 +223,6 @@ if __name__ == '__main__':
                                                               **conf_params)
                 for i in range(len(test_decision_values)):
                     scores = sklearn.metrics.average_precision_score(ytest, test_decision_values[i])
-                    #scores = roc_auc_score(ytest, test_decision_values[i])
                     log('trn:%g' % (roc_auc_score(ytrain, train_decision_values[i])))
                     log('tst:\t%g' % (scores))
     
@@ -286,17 +233,17 @@ if __name__ == '__main__':
             print_scores(all_scores)
             
             dump_scores(score_dump_file, all_scores)
-    
-            model_structure = [{f : (l.getClassifierFeatureWeights()[f],
-                    l._FCEs[f].getFeatures())
-                    for f in l.getClassifierFeatures()}
-                    for l in rat.learners]
+
+            model_structure = [{f: (l.getClassifierFeatureWeights()[f],
+                                    l._FCEs[f].getFeatures())
+                                for f in l.getClassifierFeatures()}
+                               for l in rat.learners]
             model_dump_file = working_dir + '/models/%s-%d-rat-%d-%s.dmp' % \
                 (method, cv_index, ri, str(uuid.uuid1()))
             pickle.dump(model_structure,
                 open(model_dump_file, 'wb'))
 
-    if (method == 'all' or method == 'raccoon'):
+    if method == 'all' or method == 'raccoon':
         log('raccoon')
         import sklearn.svm
         model = Raccoon.core.raccoon.Raccoon(verbose=3, logger=log)
@@ -304,7 +251,6 @@ if __name__ == '__main__':
         predictor = sklearn.svm.SVC()
         param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
                       'kernel': ['linear', 'rbf']}
-        #tmpt = model.predict(Xtrain, model=predictor, param_dist=param_dist)
         test_results = model.predict(Xtest, model=predictor, param_dist=param_dist)
         scores = sklearn.metrics.average_precision_score(ytest, [k['decision_function'][0] for k in test_results])
         

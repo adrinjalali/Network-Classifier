@@ -39,7 +39,7 @@ class WeakLearner:
         i = 0
         for f in selected_features:
             i += 1
-            if self.verbose > 1:
+            if self.verbose > 0:
                 self.logger("%d / %d fitting FCE for feature %d" % (i, selected_features.shape[0], f))
             fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs, verbose=self.verbose)
             fce.fit(X, f)

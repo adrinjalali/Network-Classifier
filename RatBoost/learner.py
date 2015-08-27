@@ -45,7 +45,11 @@ class WeakLearner:
             self.FCEs[f] = fce
 
     def get_features(self):
-        scores = self.learner.coef_.flatten()
+        if hasattr(self.learner, 'best_estimator_'):
+            learner = self.learner.best_estimator
+        else:
+            learner = self.learner
+        scores = learner.coef_.flatten()
         threshold = np.min(abs(scores)) + (
             np.max(abs(scores)) - np.min(abs(scores))) * 0.0
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
@@ -53,11 +57,15 @@ class WeakLearner:
                          self.excluded_features)[local_cols]
 
     def get_feature_weights(self):
-        scores = self.learner.coef_.flatten()
+        if hasattr(self.learner, 'best_estimator_'):
+            learner = self.learner.best_estimator
+        else:
+            learner = self.learner
+        scores = learner.coef_.flatten()
         threshold = np.min(abs(scores)) + (
             np.max(abs(scores)) - np.min(abs(scores))) * 0.0
         local_cols = np.arange(scores.shape[0])[abs(scores) > threshold]
-        scores = scores[local_cols,]
+        scores = scores[local_cols, ]
         features = self.get_features()
         return dict([(features[i], scores[i]) for i in range(len(scores))])
 

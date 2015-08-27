@@ -11,101 +11,50 @@ INPUT_ROOT="/scratch/TL/pool0/ajalali/ratboost/shared/Data"
 
 #submit_job usage: submit_job working_dir data target method
 submit_job(){
-qsub -cwd -V -N $3-$2-$4 -t 1:50 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=20:: -l mem_free=$5,h_vmem=$5,h_stack=256M runjob.sh $INPUT_ROOT/$2/$3 $1/$2/$3 $4
+qsub -cwd -V -N $3-$2-$4 -t 1:50 -j y -o /scratch/TL/pool0/ajalali/ratboost_log -l h_rt=72:: -l mem_free=$5,h_vmem=$5,h_stack=256M runjob.sh $INPUT_ROOT/$2/$3 $1/$2/$3 $4
 echo $1 $2 $3 $4 $5
 }
 
 run_for_data_all(){
     #submit_job $1 $2 $3 'all' 40G
-    #submit_job $1 $2 $3 'others' 10G
-    #submit_job $1 $2 $3 'rat' 40G
-    submit_job $1 $2 $3 'raccoon' 20G
+    #submit_job $1 $2 $3 'others' $4
+    #submit_job $1 $2 $3 'rat' $5
+    submit_job $1 $2 $3 'raccoon' $6
 }
 
-#run_for_data usage: run_for_data working_dir data target regularizer_index
-run_for_data(){
-    #submit_job $1 $2 $3 'ratboost_logistic_regression' 10G $4
-    submit_job $1 $2 $3 'ratboost_linear_svc' $5 $4
-    #submit_job $1 $2 $3 'ratboost_nu_svc' 10G $4
-}
+run_for_data_all $1 TCGA-THCA ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-THCA tumor_focality 10G 40G 20G
 
-#run_for_data_others $1 vantveer prognosis
+run_for_data_all $1 TCGA-UCEC retrospective_collection 10G 40G 20G
+run_for_data_all $1 TCGA-UCEC tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-UCEC vital_status 10G 40G 20G
 
-#run_for_data_others $1 TCGA-LAML vital_status
-#run_for_data_others $1 TCGA-LAML risk_group
+run_for_data_all $1 TCGA-SARC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-SARC tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-SARC residual_tumor 10G 40G 20G
 
-#run_for_data_others $1 TCGA-LAML-GeneExpression vital_status
-#run_for_data_others $1 TCGA-LAML-GeneExpression risk_group
+run_for_data_all $1 TCGA-LGG vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-LGG tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-LGG histologic_diagnosis 10G 40G 20G
+run_for_data_all $1 TCGA-LGG tumor_grade 10G 40G 20G
 
-run_for_data_all $1 TCGA-THCA ajcc_pathologic_tumor_stage
-run_for_data_all $1 TCGA-THCA tumor_focality
+run_for_data_all $1 TCGA-BRCA er_status_by_ihc 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_pathologic_tumor_stage 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_tumor_pathologic_pt 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_nodes_pathologic_pn 10G 40G 40G
 
-run_for_data_all $1 TCGA-UCEC retrospective_collection
-run_for_data_all $1 TCGA-UCEC tumor_status
-run_for_data_all $1 TCGA-UCEC vital_status
+run_for_data_all $1 TCGA-COAD ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-COAD ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-COAD ajcc_nodes_pathologic_pn 10G 40G 20G
 
-run_for_data_all $1 TCGA-SARC vital_status
-run_for_data_all $1 TCGA-SARC tumor_status
-run_for_data_all $1 TCGA-SARC residual_tumor
+run_for_data_all $1 TCGA-KIRC ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC ajcc_nodes_pathologic_pn 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC vital_status 10G 40G 20G
 
-run_for_data_all $1 TCGA-LGG vital_status
-run_for_data_all $1 TCGA-LGG tumor_status
-run_for_data_all $1 TCGA-LGG histologic_diagnosis
-run_for_data_all $1 TCGA-LGG tumor_grade
-
-run_for_data_all $1 TCGA-BRCA er_status_by_ihc
-run_for_data_all $1 TCGA-BRCA ajcc_pathologic_tumor_stage
-run_for_data_all $1 TCGA-BRCA ajcc_tumor_pathologic_pt
-run_for_data_all $1 TCGA-BRCA ajcc_nodes_pathologic_pn
-
-run_for_data_all $1 TCGA-COAD ajcc_pathologic_tumor_stage
-run_for_data_all $1 TCGA-COAD ajcc_tumor_pathologic_pt
-run_for_data_all $1 TCGA-COAD ajcc_nodes_pathologic_pn
-
-run_for_data_all $1 TCGA-KIRC ajcc_pathologic_tumor_stage
-run_for_data_all $1 TCGA-KIRC ajcc_tumor_pathologic_pt
-run_for_data_all $1 TCGA-KIRC ajcc_nodes_pathologic_pn
-run_for_data_all $1 TCGA-KIRC vital_status
-
-run_for_data_all $1 TCGA-LIHC ajcc_pathologic_tumor_stage
-run_for_data_all $1 TCGA-LIHC ajcc_tumor_pathologic_pt
-run_for_data_all $1 TCGA-LIHC ajcc_nodes_pathologic_pn
-run_for_data_all $1 TCGA-LIHC vital_status
-run_for_data_all $1 TCGA-LIHC tumor_grade
-
-#for RI in 2 4 6 8 10 12 14 16 18
-#do
-
-    ##run_for_data $1 vantveer prognosis $RI 5G
-
-    ##run_for_data $1 TCGA-LAML vital_status $RI 5G
-    ##run_for_data $1 TCGA-LAML risk_group $RI 5G
-
-    ##run_for_data $1 TCGA-LAML-GeneExpression vital_status $RI 5G
-    ##run_for_data $1 TCGA-LAML-GeneExpression risk_group $RI 5G
-
-    ##run_for_data $1 nordlund TvsB $RI
-    ##run_for_data $1 nordlund HeHvst1221 $RI
-
-    #run_for_data $1 TCGA-UCEC retrospective_collection $RI 15G
-    #run_for_data $1 TCGA-UCEC tumor_status $RI 15G
-    #run_for_data $1 TCGA-UCEC vital_status $RI 15G
-
-    #run_for_data $1 TCGA-SARC vital_status $RI 15G
-    #run_for_data $1 TCGA-SARC tumor_status $RI 15G
-    #run_for_data $1 TCGA-SARC residual_tumor $RI 15G
-
-    #run_for_data $1 TCGA-BRCA er_status_by_ihc $RI 20G
-    #run_for_data $1 TCGA-BRCA ajcc_pathologic_tumor_stage $RI 20G
-    #run_for_data $1 TCGA-BRCA ajcc_tumor_pathologic_pt $RI 20G
-    #run_for_data $1 TCGA-BRCA ajcc_nodes_pathologic_pn $RI 20G
-
-    #run_for_data $1 TCGA-THCA ajcc_pathologic_tumor_stage $RI 20G
-    #run_for_data $1 TCGA-THCA tumor_focality $RI 20G
-    
-    #run_for_data $1 TCGA-LGG vital_status $RI 20G
-    #run_for_data $1 TCGA-LGG tumor_status $RI 20G
-    #run_for_data $1 TCGA-LGG histologic_diagnosis $RI 20G
-    #run_for_data $1 TCGA-LGG tumor_grade $RI 20G
-#done
+run_for_data_all $1 TCGA-LIHC ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC ajcc_nodes_pathologic_pn 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC tumor_grade 10G 40G 20G
 

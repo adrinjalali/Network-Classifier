@@ -8,10 +8,11 @@ from . import FCE
 
 
 class Raccoon:
-    def __init__(self, verbose=0, logger=None):
+    def __init__(self, verbose=0, logger=None, n_jobs=1):
         self.features = None
         self.FCEs = dict()
         self.verbose = verbose
+        self.n_jobs=n_jobs
         self.Xtrain = None
         self.ytrain = None
         self.normalizer = None
@@ -49,7 +50,7 @@ class Raccoon:
             i += 1
             if self.verbose > 1:
                 self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
-            fce = FCE.RidgeBasedFCE(self.logger)
+            fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs)
             fce.fit(X, f)
             self.FCEs[f] = fce
 
@@ -93,7 +94,7 @@ class Raccoon:
                     self.logger([(key, confidences[key]) for key in selected_features])
 
                 random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                                       n_iter=100, n_jobs=1, cv=10,
+                                                                       n_iter=100, n_jobs=self.j_jobs, cv=10,
                                                                        verbose=0)
                 random_search.fit(self.Xtrain[:, selected_features], self.ytrain)
                 if random_search.best_score_ > best_score:
@@ -114,7 +115,7 @@ class Raccoon:
                 self.logger([(key, confidences[key]) for key in selected_features])
 
             random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                                   n_iter=100, n_jobs=1, cv=10,
+                                                                   n_iter=100, n_jobs=self.n_jobs, cv=10,
                                                                    verbose=0)
             random_search.fit(self.Xtrain[:, selected_features], self.ytrain)
 

@@ -46,7 +46,7 @@ if __name__ == '__main__':
     #method = 'ratboost_linear_svc'
     cv_index = -1
     #cv_index = 5
-    cpu_count = 40
+    cpu_count = 1
     regularizer_index = None
     batch_based_cv = False
     for i in range(len(sys.argv)):
@@ -58,6 +58,7 @@ if __name__ == '__main__':
         if (sys.argv[i] == '--method'):
             method = sys.argv[i + 1]
         if (sys.argv[i] == '--cv-index'):
+            print(sys.argv[i + 1])
             cv_index = int(sys.argv[i + 1]) - 1
         if (sys.argv[i] == '--regularizer-index'):
             regularizer_index = int(sys.argv[i + 1])
@@ -145,12 +146,12 @@ if __name__ == '__main__':
     if method == 'all' or method == 'others':
 
         log('svms')
-        model = svm.NuSVC(verbose=False,
-                          probability=False)
-        params = {'kernel': ['linear', 'rbf'],
-                  'nu': np.arange(7) * 0.1 + 0.05}
-        machine = sklearn.grid_search.GridSearchCV(estimator=model,
-                                                   param_grid=params)
+        model = sklearn.svm.SVC()
+        params = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
+                      'kernel': ['linear', 'rbf']}
+        machine = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=params,
+                                                               n_iter=100, n_jobs=cpu_count, cv=10,
+                                                               verbose=0)
         machine.fit(Xtrain, ytrain)
         scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
         log('svm\t%s' % scores)
@@ -163,7 +164,8 @@ if __name__ == '__main__':
                   'n_estimators': [5, 20, 50, 100, 200]}
         model = sklearn.ensemble.GradientBoostingClassifier()
         machine = sklearn.grid_search.GridSearchCV(estimator=model,
-                                                   param_grid=params)
+                                                   param_grid=params,
+                                                   n_jobs=cpu_count)
         machine.fit(Xtrain, ytrain)
         scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
         log('gbc\t%s' % scores)
@@ -177,7 +179,8 @@ if __name__ == '__main__':
                   'n_estimators': [5, 20, 50, 100, 200]}
         model = sklearn.ensemble.AdaBoostClassifier(algorithm="SAMME.R")
         machine = sklearn.grid_search.GridSearchCV(estimator=model,
-                                                   param_grid=params)
+                                                   param_grid=params,
+                                                   n_jobs=cpu_count)
         machine.fit(Xtrain, ytrain)
         scores = sklearn.metrics.average_precision_score(ytest, machine.decision_function(Xtest))
         log('adb\t%s' % scores)
@@ -246,7 +249,7 @@ if __name__ == '__main__':
     if method == 'all' or method == 'raccoon':
         log('raccoon')
         import sklearn.svm
-        model = Raccoon.core.raccoon.Raccoon(verbose=3, logger=log)
+        model = Raccoon.core.raccoon.Raccoon(verbose=3, logger=log, n_jobs=cpu_count)
         model.fit(Xtrain, ytrain)
         predictor = sklearn.svm.SVC()
         param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),

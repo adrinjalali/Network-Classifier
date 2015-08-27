@@ -17,14 +17,19 @@ class RidgeBasedFCE(BaseEstimator):
     is calculated from training data.
     """
 
-    def __init__(self, logger=None):
-        self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
-                                                         kernel='linear',
-                                                         gamma=None,
-                                                         degree=3,
-                                                         coef0=1,
-                                                         kernel_params=None)
-        #self._learner = sklearn.svm.SVR(C=0.1, kernel='linear')
+    def __init__(self, logger=None, n_jobs=1):
+        #self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
+        #                                                 kernel='linear',
+        #                                                 gamma=None,
+        #                                                 degree=3,
+        #                                                 coef0=1,
+        #                                                 kernel_params=None)
+        param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
+                      'kernel': ['linear', 'rbf']}
+        model = sklearn.svm.SVR(C=0.1, kernel='linear')
+        self._learner = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
+                                                               n_iter=100, n_jobs=n_jobs, cv=10,
+                                                               verbose=0)
         self.feature = None
         self.error_mean = None
         self.error_std = None

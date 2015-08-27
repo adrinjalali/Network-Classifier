@@ -5,7 +5,8 @@ process_problem(){
     echo $1 $2 $3
     #rm  $1/$2/$3/results/*rat*
     rm  $1/$2/$3/results/*raccoon*
-    #rm  $1/$2/$3/models/*
+    #rm  $1/$2/$3/results/*others*
+    #rm  $1/$2/$3/models/*others*
 }
 
 #process_problem $1 vantveer prognosis

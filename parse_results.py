@@ -37,7 +37,9 @@ methods_order = ['SVM, linear kernel',
 
 def append_score(scores, score):
     if (not isinstance(score, dict)):
-        scores.append(np.array(score).flatten()[0])
+        value = np.array(score).flatten()[0]
+        if not np.isnan(value):
+            scores.append(value)
     else:
         for key, value in score.items():
             if not key in scores:
@@ -379,7 +381,7 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_2015_08_12/Data"
+        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_2015_08_22/Data"
 
     all_scores = get_scores(root_dir)
 

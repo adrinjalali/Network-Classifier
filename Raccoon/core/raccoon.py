@@ -4,7 +4,8 @@ import sklearn.svm
 import sklearn.base
 import sklearn.preprocessing
 import sklearn.grid_search
-from . import FCE
+
+from common import FCE
 
 
 class Raccoon:
@@ -12,11 +13,11 @@ class Raccoon:
         self.features = None
         self.FCEs = dict()
         self.verbose = verbose
-        self.n_jobs=n_jobs
+        self.n_jobs = n_jobs
         self.Xtrain = None
         self.ytrain = None
         self.normalizer = None
-        if logger == None:
+        if logger is None:
             self.logger = print
         else:
             self.logger = logger

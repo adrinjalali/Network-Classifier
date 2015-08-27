@@ -1,29 +1,14 @@
-import sys;
-import os;
-import numpy as np;
-import graph_tool as gt;
-from graph_tool import draw;
-from graph_tool import spectral;
-from graph_tool import stats;
-from sklearn import svm;
-from sklearn import cross_validation as cv;
-from sklearn.metrics import roc_auc_score;
+from sklearn import cross_validation as cv
 import sklearn.metrics
-from sklearn.grid_search import GridSearchCV
 import sklearn.ensemble
 import sklearn.tree
-from collections import defaultdict
-import time
-from joblib import Parallel, delayed, logger
-import pickle
 import uuid
-import re
 import Raccoon.core.raccoon
+import RatBoost.ratboost
 
-
-from constants import *;
 from misc import *
 from rat import *
+
 
 def add_to_scores(params):
     current = all_scores
@@ -43,7 +28,6 @@ if __name__ == '__main__':
     #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_07_05/Data/TCGA-LGG/tumor_status'
     #input_dir = '/scratch/TL/pool0/ajalali/ratboost/shared/Data/TCGA-LGG/tumor_status'
     method = ''
-    #method = 'ratboost_linear_svc'
     cv_index = -1
     #cv_index = 5
     cpu_count = 1
@@ -191,17 +175,60 @@ if __name__ == '__main__':
         print_scores(all_scores)
 
         dump_scores(score_dump_file, all_scores)
-        
+
+    if method == 'all' or method == 'ratboost':
+        log('ratboost')
+        max_learners = 15
+
+        inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
+        predicted = dict()
+        real = dict()
+        min_learners = max_learners
+        for train, test in inner_cv:
+            inner_xtrain = Xtrain[train, :]
+            inner_ytrain = ytrain[train, :]
+            inner_xtest = Xtrain[test, :]
+            inner_ytest = ytrain[test, :]
+            machine = RatBoost.ratboost.RatBoost(max_learners=max_learners, logger=log, verbose=2)
+            machine.fit(inner_xtrain, inner_ytrain)
+
+            min_learners = min(min_learners, len(machine.learners))
+
+            test_decision_values = machine.decision_function(Xtest,
+                                                             return_iterative = True)
+            for i in range(min_learners):
+                if i not in real.keys():
+                    real[i] = np.empty(0, dtype=int)
+                    predicted[i] = np.empty(0, dtype=int)
+
+                predicted[i] = np.hstack((predicted[i], test_decision_values[i]))
+                real[i] = np.hstack((real[i], inner_ytest))
+
+        log('inner cv scores')
+
+        max_score_i = -1
+        max_score = 0
+        for i in range(len(min_learners)):
+            score = sklearn.metrics.average_precision_score(real[i], predicted[i])
+            log('tst:\t%g' % score)
+            if score > max_score:
+                max_score = score
+                max_score_i = i
+
+        machine = RatBoost.ratboost.RatBoost(max_learners=max_score_i, logger=log, verbose=2)
+        machine.fit(Xtrain, ytrain)
+        test_decision_values = machine.decision_function(Xtest,
+                                                         return_iterative = False)
+        score = sklearn.metrics.average_precision_score(ytest, test_decision_values)
+        all_scores[this_method] = [score]
+
+        log()
+        print_scores(all_scores)
+        dump_scores(score_dump_file, all_scores)
+
     if method == 'all' or method == 'rat':
         log('ratboost')
-        max_learner_count = 15
-
-        name_params = [('RatBoost No First Layer Confidence',
-                        {'firstLayerConfidence':False,
-                         'secondLayerConfidence':True}),
-                       ('RatBoost No Confidence',
-                        {'firstLayerConfidence':False,
-                         'secondLayerConfidence':False})]
+        max_learners = 15
 
         for ri in np.hstack((1, np.array(list(range(10))) * 2)):
             log('------------ ri:%g' % (ri))

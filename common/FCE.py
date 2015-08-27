@@ -1,13 +1,15 @@
 # FCE: feature confidence extimator
+import math
+
 import sklearn
 import sklearn.kernel_ridge
 import sklearn.svm
 import numpy as np
 import sklearn.cross_validation as cv
 from sklearn.base import BaseEstimator
-import math
 import scipy.special
-from .misc import Misc
+
+from common.misc import Misc
 
 
 class RidgeBasedFCE(BaseEstimator):

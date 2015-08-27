@@ -186,9 +186,9 @@ if __name__ == '__main__':
         min_learners = max_learners
         for train, test in inner_cv:
             inner_xtrain = Xtrain[train, :]
-            inner_ytrain = ytrain[train, :]
+            inner_ytrain = ytrain[train]
             inner_xtest = Xtrain[test, :]
-            inner_ytest = ytrain[test, :]
+            inner_ytest = ytrain[test]
             machine = RatBoost.ratboost.RatBoost(max_learners=max_learners, logger=log, verbose=2)
             machine.fit(inner_xtrain, inner_ytrain)
 

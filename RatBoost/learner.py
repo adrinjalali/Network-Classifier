@@ -15,6 +15,7 @@ class WeakLearner:
             learner = sklearn.grid_search.GridSearchCV(estimator=predictor,
                                                        param_grid=param_dist,
                                                        n_jobs=self.n_jobs, cv=5)
+        self.learner = learner
         self.excluded_features = np.copy(excluded_features)
         self._X_colcount = 0
         self.FCEs = dict()

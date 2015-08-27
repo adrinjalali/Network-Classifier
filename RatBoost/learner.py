@@ -14,7 +14,8 @@ class WeakLearner:
             param_dist = {'C': pow(2.0, np.arange(-10, 11))}
             learner = sklearn.grid_search.GridSearchCV(estimator=predictor,
                                                        param_grid=param_dist,
-                                                       n_jobs=self.n_jobs, cv=5)
+                                                       n_jobs=self.n_jobs, cv=5,
+                                                       verbose=verbose)
         self.learner = learner
         self.excluded_features = np.copy(excluded_features)
         self._X_colcount = 0
@@ -40,13 +41,13 @@ class WeakLearner:
             i += 1
             if self.verbose > 1:
                 self.logger("%d / %d fitting FCE for feature %d" % (i, selected_features.shape[0], f))
-            fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs)
+            fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs, verbose=self.verbose)
             fce.fit(X, f)
             self.FCEs[f] = fce
 
     def get_features(self):
         if hasattr(self.learner, 'best_estimator_'):
-            learner = self.learner.best_estimator
+            learner = self.learner.best_estimator_
         else:
             learner = self.learner
         scores = learner.coef_.flatten()
@@ -58,7 +59,7 @@ class WeakLearner:
 
     def get_feature_weights(self):
         if hasattr(self.learner, 'best_estimator_'):
-            learner = self.learner.best_estimator
+            learner = self.learner.best_estimator_
         else:
             learner = self.learner
         scores = learner.coef_.flatten()

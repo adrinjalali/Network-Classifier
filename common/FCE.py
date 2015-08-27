@@ -19,7 +19,7 @@ class RidgeBasedFCE(BaseEstimator):
     is calculated from training data.
     """
 
-    def __init__(self, logger=None, n_jobs=1):
+    def __init__(self, logger=None, n_jobs=1, verbose=0):
         #self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
         #                                                 kernel='linear',
         #                                                 gamma=None,

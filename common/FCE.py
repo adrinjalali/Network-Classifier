@@ -31,7 +31,7 @@ class RidgeBasedFCE(BaseEstimator):
         model = sklearn.svm.SVR(C=0.1, kernel='linear')
         self._learner = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
                                                                n_iter=100, n_jobs=n_jobs, cv=10,
-                                                               verbose=0)
+                                                               verbose=verbose)
         self.feature = None
         self.error_mean = None
         self.error_std = None

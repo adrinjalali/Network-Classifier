@@ -189,7 +189,8 @@ if __name__ == '__main__':
             inner_ytrain = ytrain[train]
             inner_xtest = Xtrain[test, :]
             inner_ytest = ytrain[test]
-            machine = RatBoost.ratboost.RatBoost(max_learners=max_learners, logger=log, verbose=2)
+            machine = RatBoost.ratboost.RatBoost(max_learners=max_learners, logger=log,
+                                                 verbose=2, n_jobs=cpu_count)
             machine.fit(inner_xtrain, inner_ytrain)
 
             min_learners = min(min_learners, len(machine.learners))
@@ -215,7 +216,8 @@ if __name__ == '__main__':
                 max_score = score
                 max_score_i = i
 
-        machine = RatBoost.ratboost.RatBoost(max_learners=max_score_i, logger=log, verbose=2)
+        machine = RatBoost.ratboost.RatBoost(max_learners=max_score_i, logger=log,
+                                             verbose=2, n_jobs=cpu_count)
         machine.fit(Xtrain, ytrain)
         test_decision_values = machine.decision_function(Xtest,
                                                          return_iterative = False)

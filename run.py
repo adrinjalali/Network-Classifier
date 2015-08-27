@@ -190,7 +190,7 @@ if __name__ == '__main__':
             inner_xtest = Xtrain[test, :]
             inner_ytest = ytrain[test]
             machine = RatBoost.ratboost.RatBoost(max_learners=max_learners, logger=log,
-                                                 verbose=2, n_jobs=cpu_count)
+                                                 verbose=1, n_jobs=cpu_count)
             machine.fit(inner_xtrain, inner_ytrain)
 
             min_learners = min(min_learners, len(machine.learners))

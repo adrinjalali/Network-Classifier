@@ -33,7 +33,7 @@ class RidgeBasedFCE(BaseEstimator):
         #self._learner = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
         #                                                      n_iter=40, n_jobs=n_jobs, cv=5,
         #                                                       verbose=verbose)
-        self._learner = sklearn.grid_search.GridSearchCV(model, param_distributions=param_dist,
+        self._learner = sklearn.grid_search.GridSearchCV(model, param_grid=param_dist,
                                                                n_jobs=n_jobs, cv=5,
                                                                verbose=verbose)
 

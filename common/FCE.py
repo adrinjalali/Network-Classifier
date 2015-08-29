@@ -30,13 +30,13 @@ class RidgeBasedFCE(BaseEstimator):
                       'kernel': ['linear', 'rbf']}
         model = sklearn.svm.SVR(C=0.1, kernel='linear')
         self._learner = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                               n_iter=100, n_jobs=n_jobs, cv=5,
+                                                               n_iter=40, n_jobs=n_jobs, cv=5,
                                                                verbose=verbose)
         self.feature = None
         self.error_mean = None
         self.error_std = None
         self.input_col_count = None
-        if logger == None:
+        if logger is None:
             self.logger = print
         else:
             self.logger = logger
@@ -75,8 +75,11 @@ class RidgeBasedFCE(BaseEstimator):
         return self._learner.predict(Misc.exclude_cols(X, self.feature))
 
     def getConfidence(self, X):
-        def phi(x): return 0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2))
-        def my_score(x): return 1 - abs(phi(x) - phi(-x))
+        def phi(x):
+            return 0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2))
+
+        def my_score(x):
+            return 1 - abs(phi(x) - phi(-x))
 
         X = X.view(np.ndarray)
         if X.ndim == 1:

@@ -1,4 +1,5 @@
 import numpy as np
+import sklearn.preprocessing
 from .learner import WeakLearner
 
 
@@ -13,8 +14,13 @@ class RatBoost:
         self.learners = []
         self.verbose = verbose
         self.max_learners = max_learners
+        self.normalizer = None
 
     def fit(self, X, y):
+        normalizer = sklearn.preprocessing.Normalizer().fit(X)
+        self.normalizer = normalizer
+        X = self.normalizer.transform(X)
+
         excluded_features = np.empty(0, dtype=int)
         for i in range(self.max_learners):
             wlearner = WeakLearner(excluded_features=excluded_features, learner=self.learner,
@@ -22,7 +28,7 @@ class RatBoost:
             wlearner.fit(X, y)
             excluded_features = np.union1d(excluded_features, wlearner.get_features())
             self.learners.append(wlearner)
-            if excluded_features.shape[0] > (X.shape[1] / 5):
+            if excluded_features.shape[0] > (X.shape[1] / 10):
                     break
 
     def decision_function(self, X,
@@ -32,6 +38,8 @@ class RatBoost:
 
         if X.ndim == 1:
             X = X.reshape(1, -1)
+
+        X = self.normalizer.transform(X)
 
         predictions = np.empty((X.shape[0], 0), dtype=float)
         confidences = np.empty((X.shape[0], 0), dtype=float)

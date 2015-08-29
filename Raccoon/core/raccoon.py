@@ -95,7 +95,7 @@ class Raccoon:
                     self.logger([(key, confidences[key]) for key in selected_features])
 
                 random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
-                                                                       n_iter=100, n_jobs=self.j_jobs, cv=10,
+                                                                       n_iter=100, n_jobs=self.n_jobs, cv=10,
                                                                        verbose=0)
                 random_search.fit(self.Xtrain[:, selected_features], self.ytrain)
                 if random_search.best_score_ > best_score:

@@ -1,12 +1,15 @@
 #!/bin/bash
 #usage: ./clearresults.sh target_folder
 
+DATA_ROOT="../../Data/"
+
 process_problem(){
     echo $1 $2 $3
     #rm  $1/$2/$3/results/*rat*
-    rm  $1/$2/$3/results/*raccoon*
+    #rm  $1/$2/$3/results/*raccoon*
     #rm  $1/$2/$3/results/*others*
     #rm  $1/$2/$3/models/*others*
+    rm  $DATA_ROOT/$1/$2/results/*$3*
 }
 
 #process_problem $1 vantveer prognosis
@@ -20,40 +23,40 @@ process_problem(){
 #process_problem $1 TCGA-LAML-GeneExpression vital_status
 #process_problem $1 TCGA-LAML-GeneExpression risk_group
 
-process_problem $1 TCGA-BRCA er_status_by_ihc
-process_problem $1 TCGA-BRCA ajcc_pathologic_tumor_stage
-process_problem $1 TCGA-BRCA ajcc_tumor_pathologic_pt
-process_problem $1 TCGA-BRCA ajcc_nodes_pathologic_pn
+process_problem TCGA-BRCA er_status_by_ihc $1
+process_problem TCGA-BRCA ajcc_pathologic_tumor_stage $1
+process_problem TCGA-BRCA ajcc_tumor_pathologic_pt $1
+process_problem TCGA-BRCA ajcc_nodes_pathologic_pn $1
 
-process_problem $1 TCGA-SARC residual_tumor
-process_problem $1 TCGA-SARC vital_status
-process_problem $1 TCGA-SARC tumor_status
+process_problem TCGA-SARC residual_tumor $1
+process_problem TCGA-SARC vital_status $1
+process_problem TCGA-SARC tumor_status $1
 
 
-process_problem $1 TCGA-THCA tumor_focality
-process_problem $1 TCGA-THCA ajcc_pathologic_tumor_stage
+process_problem TCGA-THCA tumor_focality $1
+process_problem TCGA-THCA ajcc_pathologic_tumor_stage $1
 
-process_problem $1 TCGA-UCEC tumor_status
-process_problem $1 TCGA-UCEC vital_status
-process_problem $1 TCGA-UCEC retrospective_collection
+process_problem TCGA-UCEC tumor_status $1
+process_problem TCGA-UCEC vital_status $1
+process_problem TCGA-UCEC retrospective_collection $1
 
-process_problem $1 TCGA-LGG vital_status
-process_problem $1 TCGA-LGG tumor_status
-process_problem $1 TCGA-LGG histologic_diagnosis
-process_problem $1 TCGA-LGG tumor_grade
+process_problem TCGA-LGG vital_status $1
+process_problem TCGA-LGG tumor_status $1
+process_problem TCGA-LGG histologic_diagnosis $1
+process_problem TCGA-LGG tumor_grade $1
 
-process_problem $1 TCGA-COAD ajcc_pathologic_tumor_stage
-process_problem $1 TCGA-COAD ajcc_tumor_pathologic_pt
-process_problem $1 TCGA-COAD ajcc_nodes_pathologic_pn
+process_problem TCGA-COAD ajcc_pathologic_tumor_stage $1
+process_problem TCGA-COAD ajcc_tumor_pathologic_pt $1
+process_problem TCGA-COAD ajcc_nodes_pathologic_pn $1
 
-process_problem $1 TCGA-KIRC ajcc_pathologic_tumor_stage
-process_problem $1 TCGA-KIRC ajcc_tumor_pathologic_pt
-process_problem $1 TCGA-KIRC ajcc_nodes_pathologic_pn
-process_problem $1 TCGA-KIRC vital_status
+process_problem TCGA-KIRC ajcc_pathologic_tumor_stage $1
+process_problem TCGA-KIRC ajcc_tumor_pathologic_pt $1
+process_problem TCGA-KIRC ajcc_nodes_pathologic_pn $1
+process_problem TCGA-KIRC vital_status $1
 
-process_problem $1 TCGA-LIHC ajcc_pathologic_tumor_stage
-process_problem $1 TCGA-LIHC ajcc_tumor_pathologic_pt
-process_problem $1 TCGA-LIHC ajcc_nodes_pathologic_pn
-process_problem $1 TCGA-LIHC vital_status
-process_problem $1 TCGA-LIHC tumor_grade
+process_problem TCGA-LIHC ajcc_pathologic_tumor_stage $1
+process_problem TCGA-LIHC ajcc_tumor_pathologic_pt $1
+process_problem TCGA-LIHC ajcc_nodes_pathologic_pn $1
+process_problem TCGA-LIHC vital_status $1
+process_problem TCGA-LIHC tumor_grade $1
 

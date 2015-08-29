@@ -278,7 +278,7 @@ if __name__ == '__main__':
     if method == 'all' or method == 'raccoon':
         log('raccoon')
         import sklearn.svm
-        model = Raccoon.core.raccoon.Raccoon(verbose=3, logger=log, n_jobs=cpu_count)
+        model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count)
         model.fit(Xtrain, ytrain)
         predictor = sklearn.svm.SVC()
         param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),

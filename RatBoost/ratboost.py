@@ -24,7 +24,7 @@ class RatBoost:
         excluded_features = np.empty(0, dtype=int)
         for i in range(self.max_learners):
             if self.verbose > 0:
-                self.logger('fitting learner %d / %d' % (i, self.max_learners))
+                self.logger('fitting learner %d / %d' % (i + 1, self.max_learners))
             wlearner = WeakLearner(excluded_features=excluded_features, learner=self.learner,
                                    n_jobs=self.n_jobs, verbose=self.verbose, logger=self.logger)
             wlearner.fit(X, y)

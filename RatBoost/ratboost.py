@@ -57,7 +57,7 @@ class RatBoost:
                                      l.confidence(X,).reshape(-1, 1)))
 
             if return_iterative:
-                if len(iterative_result) > 0:
+                if len(confidences) > 0:
                     result = np.average(predictions, weights=confidences, axis=1)
                 else:
                     result = predictions

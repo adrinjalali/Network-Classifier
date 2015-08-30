@@ -1,7 +1,7 @@
 #!/bin/bash
 #usage: ./clearresults.sh target_folder
 
-DATA_ROOT="../../Data/"
+DATA_ROOT="`pwd`/../../Data/"
 
 process_problem(){
     echo $1 $2 $3

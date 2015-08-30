@@ -23,13 +23,18 @@ class RatBoost:
 
         excluded_features = np.empty(0, dtype=int)
         for i in range(self.max_learners):
+            if self.verbose > 0:
+                self.logger('fitting learner %d / %d' % (i, self.max_learners))
             wlearner = WeakLearner(excluded_features=excluded_features, learner=self.learner,
                                    n_jobs=self.n_jobs, verbose=self.verbose, logger=self.logger)
             wlearner.fit(X, y)
             excluded_features = np.union1d(excluded_features, wlearner.get_features())
             self.learners.append(wlearner)
             if excluded_features.shape[0] > (X.shape[1] / 10):
-                    break
+                if self.verbose > 0:
+                    self.logger('Aborting learner fit due to too many selected features: %d / %d' %
+                                (excluded_features.shape[0], X.shape[1]))
+                break
 
     def decision_function(self, X,
                           return_iterative=False,

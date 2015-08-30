@@ -179,7 +179,7 @@ if __name__ == '__main__':
     if method == 'all' or method == 'ratboost':
         log('ratboost')
         this_method = 'RatBoost'
-        max_learners = 4
+        max_learners = 15
 
         inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
         predicted = dict()

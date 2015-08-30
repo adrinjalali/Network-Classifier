@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #usage: submit_job output_root_dir
 

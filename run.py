@@ -181,8 +181,7 @@ if __name__ == '__main__':
         this_method = 'RatBoost'
         max_learners = 4
 
-        #inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
-        inner_cv = cv.StratifiedKFold(ytrain, n_folds=3)
+        inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
         predicted = dict()
         real = dict()
         min_learners = max_learners
@@ -219,7 +218,7 @@ if __name__ == '__main__':
                 max_score_i = i
 
         machine = RatBoost.ratboost.RatBoost(max_learners=max_score_i, logger=log,
-                                             verbose=2, n_jobs=cpu_count)
+                                             verbose=1, n_jobs=cpu_count)
         machine.fit(Xtrain, ytrain)
         test_decision_values = machine.decision_function(Xtest,
                                                          return_iterative=False)

@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
     if method == 'all' or method == 'ratboost':
         log('ratboost')
-        max_learners = 15
+        max_learners = 4
 
         inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
         predicted = dict()
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
         max_score_i = -1
         max_score = 0
-        for i in range(len(min_learners)):
+        for i in range(min_learners):
             score = sklearn.metrics.average_precision_score(real[i], predicted[i])
             log('tst:\t%g' % score)
             if score > max_score:

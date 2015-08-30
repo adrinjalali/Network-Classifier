@@ -203,8 +203,14 @@ if __name__ == '__main__':
                     real[i] = np.empty(0, dtype=int)
                     predicted[i] = np.empty(0, dtype=int)
 
+                log('bozghale')
+                log(test_decision_values)
+                log(inner_ytest)
                 predicted[i] = np.hstack((predicted[i], test_decision_values[i]))
                 real[i] = np.hstack((real[i], inner_ytest))
+                log('goh')
+                log(predicted[i])
+                log(real[i])
 
         log('inner cv scores')
 

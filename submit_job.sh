@@ -17,15 +17,15 @@ echo $1 $2 $3 $4 $5
 }
 
 run_for_data_all(){
-    if [ $1 -eq "others" ]
+    if [ "$1" -eq "others" ]
     then
         TIME="12::"
         MEM=$4
-    elif [ $1 -eq "ratboost" ]
+    elif [ "$1" -eq "ratboost" ]
     then
         TIME="120::"
         MEM=$5
-    elif [ $1 -eq "raccoon" ]
+    elif [ "$1" -eq "raccoon" ]
     then
         TIME="48::"
         MEM=$6

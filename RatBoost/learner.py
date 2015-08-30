@@ -11,12 +11,11 @@ class WeakLearner:
         self.n_jobs = n_jobs
         if learner is None:
             predictor = sklearn.svm.LinearSVC(penalty='l1', dual=False, class_weight='auto')
-            #param_dist = {'C': pow(2.0, np.arange(-10, 11))}
-            param_dist = {'C': pow(2.0, np.arange(-3, 3))}
+            param_dist = {'C': pow(2.0, np.arange(-10, 11))}
             learner = sklearn.grid_search.GridSearchCV(estimator=predictor,
                                                        param_grid=param_dist,
                                                        n_jobs=self.n_jobs, cv=5,
-                                                       verbose=verbose)
+                                                       verbose=0)
         self.learner = learner
         self.excluded_features = np.copy(excluded_features)
         self._X_colcount = 0

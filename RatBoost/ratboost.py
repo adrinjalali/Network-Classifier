@@ -56,12 +56,6 @@ class RatBoost:
             confidences = np.hstack((confidences,
                                      l.confidence(X,).reshape(-1, 1)))
 
-            self.logger("in ratboost")
-            self.logger('X shape %s' % str(X.shape))
-            self.logger('predictions.shape %s' % str(predictions.shape))
-            self.logger('confidences.shape %s' % str(confidences.shape))
-            self.logger(predictions)
-            self.logger(confidences)
             if return_iterative:
                 if len(confidences) > 0:
                     result = np.average(predictions, weights=confidences, axis=1)
@@ -69,10 +63,8 @@ class RatBoost:
                     result = predictions
                 if return_details:
                     result = (result, predictions, confidences)
-                self.logger('iterative result %s' % str(result))
                 iterative_result.append(result)
 
-        self.logger('total iterative result %s' % str(iterative_result))
         if return_iterative:
             return iterative_result
 

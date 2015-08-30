@@ -203,15 +203,6 @@ if __name__ == '__main__':
                     real[i] = np.empty(0, dtype=int)
                     predicted[i] = np.empty(0, dtype=int)
 
-                log('bozghale')
-                log(test_decision_values)
-                log(inner_ytest)
-                predicted[i] = np.hstack((predicted[i], test_decision_values[i]))
-                real[i] = np.hstack((real[i], inner_ytest))
-                log('goh')
-                log(predicted[i])
-                log(real[i])
-
         log('inner cv scores')
 
         max_score_i = -1
@@ -227,7 +218,7 @@ if __name__ == '__main__':
                                              verbose=2, n_jobs=cpu_count)
         machine.fit(Xtrain, ytrain)
         test_decision_values = machine.decision_function(Xtest,
-                                                         return_iterative = False)
+                                                         return_iterative=False)
         score = sklearn.metrics.average_precision_score(ytest, test_decision_values)
         all_scores[this_method] = [score]
 

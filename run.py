@@ -203,6 +203,9 @@ if __name__ == '__main__':
                     real[i] = np.empty(0, dtype=int)
                     predicted[i] = np.empty(0, dtype=int)
 
+                predicted[i] = np.hstack((predicted[i], test_decision_values[i]))
+                real[i] = np.hstack((real[i], inner_ytest))
+
         log('inner cv scores')
 
         max_score_i = -1

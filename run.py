@@ -180,7 +180,8 @@ if __name__ == '__main__':
         log('ratboost')
         max_learners = 4
 
-        inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
+        #inner_cv = cv.StratifiedKFold(ytrain, n_folds=5)
+        inner_cv = cv.StratifiedKFold(ytrain, n_folds=3)
         predicted = dict()
         real = dict()
         min_learners = max_learners

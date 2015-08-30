@@ -196,8 +196,8 @@ if __name__ == '__main__':
 
             min_learners = min(min_learners, len(machine.learners))
 
-            test_decision_values = machine.decision_function(Xtest,
-                                                             return_iterative = True)
+            test_decision_values = machine.decision_function(inner_xtest,
+                                                             return_iterative=True)
             for i in range(min_learners):
                 if i not in real.keys():
                     real[i] = np.empty(0, dtype=int)

@@ -4,6 +4,7 @@ import sklearn.svm
 import sklearn.base
 import sklearn.preprocessing
 import sklearn.grid_search
+from sklearn import cross_validation as cv
 
 from common import FCE
 
@@ -34,13 +35,25 @@ class Raccoon:
 
         # calculate pearson correlation and respective p-values
         # select the ones with a p-value < 0.05
-        tmp = [scipy.stats.stats.pearsonr(y, X[:, i]) for i in range(X.shape[1])]
-        tmp = np.array(tmp)
-        threshold_500 = np.sort(tmp[:, 1])[500]
-        threshold = min(threshold_500, 0.05)
-        self.features = np.arange(tmp.shape[0])[abs(tmp[:, 1]) < threshold]
-        if self.verbose > 0:
-            self.logger("threshold 500, threshold: %g %g" % (threshold_500, threshold))
+        inner_cv = cv.StratifiedKFold(y, n_folds=5)
+        i = 0
+        features = set(np.arange(X.shape[1]))
+        for train, test in inner_cv:
+            inner_xtrain = X[train, :]
+            inner_ytrain = y[train]
+            tmp = [scipy.stats.stats.pearsonr(inner_ytrain, inner_xtrain[:, i])
+                   for i in range(inner_xtrain.shape[1])]
+            tmp = np.array(tmp)
+            threshold_1000 = np.sort(tmp[:, 1])[1000]
+            threshold = min(threshold_1000, 0.05)
+            if self.verbose > 0:
+                self.logger("threshold 1000, threshold: %g %g" % (threshold_1000, threshold))
+                
+            features = features.intersection(set(np.arange(tmp.shape[0])[abs(tmp[:, 1]) < threshold]))
+            if self.verbose > 0:
+                self.logger("new features length: %d" % len(features))
+
+        self.features = np.array(list(features))
 
         if self.verbose > 0:
             self.logger("%d features selected. Fitting feature confidence estimators" % (len(self.features)))

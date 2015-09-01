@@ -99,6 +99,29 @@ def print_scores(scores, prefix = '', output_stream=sys.stderr):
     for s in ignore_params:
         message = re.sub(" *\('%s.*'\) *" % (s), ' ', message)
     print(message, file=output_stream)
+
+def print_summary(scores, methods):
+    method_ranks = {m:[] for m in methods}
+    for problem in scores.keys():
+        p_scores = scores[problem]
+        result_counts = [len(x) for x in p_scores.values()]
+        if len(np.unique(result_counts)) > 1:
+            continue
+
+        has_methods = np.all([m in p_scores.keys() for m in methods])
+        if not has_methods:
+            continue
+
+        means = {x: np.mean(y) for x,y in p_scores.items()}
+        order = sorted(means, key=means.get, reverse=True)
+        for i in range(len(order)):
+            method_ranks[order[i]].append(i)
+
+    #print(method_ranks)
+    print("Method rank average (0 is best):")
+    for m,r in method_ranks.items():
+        print(m, np.mean(r))
+                    
         
 def print_log(all_scores, rat_scores = dict()):
     print('=========')

@@ -381,11 +381,14 @@ if __name__ == '__main__':
             root_dir = sys.argv[i + 1]
 
     if (root_dir == ''):
-        root_dir = "/scratch/TL/pool0/ajalali/ratboost/data_2015_08_22/Data"
+        root_dir = "../../Data"
 
     all_scores = get_scores(root_dir)
 
-    #print_scores(all_scores)
+    print_scores(all_scores)
+
+    methods = ['Gradient Boosting Classifier', 'SVM', 'Raccoon', 'Adaboost']
+    print_summary(all_scores, methods)
 
     #draw_plots(all_scores)
     
@@ -395,6 +398,7 @@ if __name__ == '__main__':
     at the moment there are 9 dataset/problems, plot them in
     3x3 subplots
     '''
+    """
     regularizer_indices = [2, 4, 6, 8, 10, 12, 14, 16, 18]
     for ri in regularizer_indices:
         print(ri)
@@ -533,3 +537,4 @@ if __name__ == '__main__':
                     key))
         #plt.show()
 
+"""

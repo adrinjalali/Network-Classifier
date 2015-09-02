@@ -1,33 +1,19 @@
-'''
+"""
     License: GPLv3.
     Adrin Jalali.
     Jan 2014, Saarbruecken, Germany.
 
 miscellaneous functions used mostly in the data loading/preprocessing
 phase.
-'''
-
-import csv;
-import sys;
-import os;
-import numpy as np;
-import graph_tool as gt;
-from graph_tool import draw;
-from graph_tool import spectral;
-from graph_tool import stats;
-from sklearn import svm;
-from sklearn import cross_validation as cv;
-from sklearn.metrics import roc_auc_score;
-from sklearn.grid_search import GridSearchCV
+"""
+import csv
 import sklearn.ensemble
 import sklearn.tree
-from collections import defaultdict
 import time
-from joblib import Parallel, delayed, logger
-import pickle
+from joblib import logger
 import re
+import scipy.stats
 
-from constants import *
 from rat import *
 
 def read_csv(file_name, skip_header, delimiter = '\t'):
@@ -100,8 +86,9 @@ def print_scores(scores, prefix = '', output_stream=sys.stderr):
         message = re.sub(" *\('%s.*'\) *" % (s), ' ', message)
     print(message, file=output_stream)
 
+
 def print_summary(scores, methods):
-    method_ranks = {m:[] for m in methods}
+    method_ranks = {m: [] for m in methods}
     for problem in scores.keys():
         p_scores = scores[problem]
         has_methods = np.all([m in p_scores.keys() for m in methods])
@@ -112,15 +99,17 @@ def print_summary(scores, methods):
         if len(np.unique(result_counts)) > 1:
             continue
 
-        means = {x: np.mean(y) for x,y in p_scores.items() if x in methods}
+        means = {x: np.mean(y) for x, y in p_scores.items() if x in methods}
         order = sorted(means, key=means.get, reverse=True)
+
+        print(scipy.stats.ttest_rel(p_scores[order[0]], p_scores[order[len(order)]]))
+
         for i in range(len(order)):
             method_ranks[order[i]].append(i)
 
-    #print(method_ranks)
     print("%d problems have complete results" % len(method_ranks[methods[0]]))
     print("Method rank average (0 is best):")
-    for m,r in method_ranks.items():
+    for m, r in method_ranks.items():
         print(m, np.mean(r))
                     
         

@@ -102,7 +102,8 @@ def print_summary(scores, methods):
         means = {x: np.mean(y) for x, y in p_scores.items() if x in methods}
         order = sorted(means, key=means.get, reverse=True)
 
-        print(scipy.stats.ttest_rel(p_scores[order[0]], p_scores[order[len(order) - 1]]))
+        if scipy.stats.ttest_rel(p_scores[order[0]], p_scores[order[len(order) - 1]]).pvalue > 0.05:
+            continue
 
         for i in range(len(order)):
             method_ranks[order[i]].append(i)

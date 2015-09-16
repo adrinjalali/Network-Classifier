@@ -21,10 +21,10 @@ run_for_data_all(){
         TIME="12::"
         MEM=$4
     elif [ "$1" == "ratboost" ]; then
-        TIME="120::"
+	TIME="12::"
         MEM=$5
     elif [ "$1" == "raccoon" ]; then
-        TIME="48::"
+        TIME="12::"
         MEM=$6
     fi
     #submit_job $OUTPUT_DIR $1 $2 'others' $3 "12::"

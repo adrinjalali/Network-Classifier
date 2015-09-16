@@ -5,6 +5,10 @@ import sklearn.tree
 import uuid
 import Raccoon.core.raccoon
 import RatBoost.ratboost
+import graph_tool as gt
+import pickle
+from collections import defaultdict
+import os
 
 from misc import *
 from rat import *
@@ -215,7 +219,9 @@ if __name__ == '__main__':
             log('tst:\t%g' % score)
             if score > max_score:
                 max_score = score
-                max_score_i = i
+                max_score_i = i + 1
+
+        log('max_score_i: %d' % max_score_i)
 
         machine = RatBoost.ratboost.RatBoost(max_learners=max_score_i, logger=log,
                                              verbose=1, n_jobs=cpu_count)

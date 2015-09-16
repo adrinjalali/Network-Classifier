@@ -20,20 +20,12 @@ class RidgeBasedFCE(BaseEstimator):
     """
 
     def __init__(self, logger=None, n_jobs=1, verbose=0):
-        #self._learner = sklearn.kernel_ridge.KernelRidge(alpha=10,
-        #                                                 kernel='linear',
-        #                                                 gamma=None,
-        #                                                 degree=3,
-        #                                                 coef0=1,
-        #                                                 kernel_params=None)
-        #param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
-        #              'kernel': ['linear', 'rbf']}
         model = sklearn.svm.SVR(C=0.1, kernel='linear')
         param_dist = {'C': pow(2.0, np.arange(-10, 11))}
         self._learner = sklearn.grid_search.GridSearchCV(model, param_grid=param_dist,
                                                          n_jobs=n_jobs, cv=5,
                                                          verbose=0)
-        #self._learner = sklearn.svm.SVR(C=0.1, kernel='linear')
+        self._learner = sklearn.svm.SVR(C=0.1, kernel='linear')
 
         self.feature = None
         self.error_mean = None
@@ -55,6 +47,12 @@ class RidgeBasedFCE(BaseEstimator):
         self.input_col_count = X.shape[1]
         self.feature = feature
         my_X = Misc.exclude_cols(X, self.feature)
+        my_y = X[:, self.feature]
+        y_mean = np.mean(my_y)
+        y_std = np.std(my_y)
+
+        # ref: http://www.sciencedirect.com/science/article/pii/S0893608004002102
+        self._learner.C = max(abs(y_mean + 3 * y_std), abs(y_mean - 3 * y_std))
 
         cvs = cv.KFold(len(X), 10, shuffle=True)
         output_errors = np.empty(0)

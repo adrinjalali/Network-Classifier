@@ -9,6 +9,7 @@ import graph_tool as gt
 import pickle
 from collections import defaultdict
 import os
+import pandas
 
 from misc import *
 from rat import *
@@ -29,8 +30,14 @@ if __name__ == '__main__':
     print('hi', file=sys.stderr);
 
     working_dir = ''
-    #working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_07_05/Data/TCGA-LGG/tumor_status'
-    #input_dir = '/scratch/TL/pool0/ajalali/ratboost/shared/Data/TCGA-LGG/tumor_status'
+    if False:
+        working_dir = '/scratch/TL/pool0/ajalali/ratboost/data_2015_10_05/Data/ICGC-LYMPH-DE/foll_dlbcl'
+        input_dir = '/scratch/TL/pool0/ajalali/ratboost/shared/Data/ICGC-LYMPH-DE/foll_dlbcl'
+        method = 'ratboost'
+        cv_index = 5
+        cpu_count = 20
+        batch_based_cv = False
+    
     method = ''
     cv_index = -1
     #cv_index = 5
@@ -103,6 +110,22 @@ if __name__ == '__main__':
         except Exception as e:
             log(e)
 
+    if not data_loaded:
+        log("trying yet another input format...")
+        try:
+            tmp = pandas.read_pickle(input_dir + '/pandas_X.pickle')
+            X = np.array(tmp)
+            y = pandas.read_pickle(input_dir + '/pandas_y.pickle')
+            y = np.array(y, dtype=int)
+            #if batch_based_cv:
+            #    cvs = pickle.load(open(input_dir + '/batch_cvs.dmp', 'rb'))
+            #else:
+            cvs = pickle.load(open(input_dir + '/normal_cvs.dmp', 'rb'))
+            cvs = list(cvs)
+            data_loaded = True
+        except Exception as e:
+            log(e)
+
     if (cv_index > len(cvs) - 1):
         log("requested cv (%d) doesn't exist (len(cvs) = %d)" % (cv_index,
                                                                    len(cvs)))
@@ -114,10 +137,10 @@ if __name__ == '__main__':
     cvs = tmp
 
     Xtrain = X[cvs[0][0],]
-    X_prime_train = X_prime[cvs[0][0],]
+    #X_prime_train = X_prime[cvs[0][0],]
     ytrain = y[cvs[0][0],]
     Xtest = X[cvs[0][1],]
-    X_prime_test = X_prime[cvs[0][1],]
+    #X_prime_test = X_prime[cvs[0][1],]
     ytest = y[cvs[0][1],]
 
     #if (np.unique(ytest).shape[0] < 2):

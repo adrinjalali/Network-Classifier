@@ -101,7 +101,9 @@ if __name__ == '__main__':
             sample_annotation = data_file['patient_annot']
             data_file = np.load(input_dir + '/../genes.npz')
             feature_annotation = data_file['genes']
-            g = gt.load_graph(input_dir + '/../graph.xml.gz')
+            # for now we're not using the graph
+            #g = gt.load_graph(input_dir + '/../graph.xml.gz')
+            g = None
             if (batch_based_cv):
                 cvs = pickle.load(open(input_dir + '/batch_cvs.dmp', 'rb'))
             else:

@@ -34,41 +34,41 @@ run_for_data_all(){
     submit_job $OUTPUT_DIR $2 $3 $1 $MEM $TIME
 }
 
-#run_for_data_all $1 TCGA-THCA ajcc_pathologic_tumor_stage 10G 40G 20G
-#run_for_data_all $1 TCGA-THCA tumor_focality 10G 40G 20G
+run_for_data_all $1 TCGA-THCA ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-THCA tumor_focality 10G 40G 20G
 
-#run_for_data_all $1 TCGA-UCEC retrospective_collection 10G 40G 20G
-#run_for_data_all $1 TCGA-UCEC tumor_status 10G 40G 20G
-#run_for_data_all $1 TCGA-UCEC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-UCEC retrospective_collection 10G 40G 20G
+run_for_data_all $1 TCGA-UCEC tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-UCEC vital_status 10G 40G 20G
 
-#run_for_data_all $1 TCGA-SARC vital_status 10G 40G 20G
-#run_for_data_all $1 TCGA-SARC tumor_status 10G 40G 20G
-#run_for_data_all $1 TCGA-SARC residual_tumor 10G 40G 20G
+run_for_data_all $1 TCGA-SARC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-SARC tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-SARC residual_tumor 10G 40G 20G
 
-#run_for_data_all $1 TCGA-LGG vital_status 10G 40G 20G
-#run_for_data_all $1 TCGA-LGG tumor_status 10G 40G 20G
-#run_for_data_all $1 TCGA-LGG histologic_diagnosis 10G 40G 20G
-#run_for_data_all $1 TCGA-LGG tumor_grade 10G 40G 20G
+run_for_data_all $1 TCGA-LGG vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-LGG tumor_status 10G 40G 20G
+run_for_data_all $1 TCGA-LGG histologic_diagnosis 10G 40G 20G
+run_for_data_all $1 TCGA-LGG tumor_grade 10G 40G 20G
 
-#run_for_data_all $1 TCGA-BRCA er_status_by_ihc 10G 40G 40G
-#run_for_data_all $1 TCGA-BRCA ajcc_pathologic_tumor_stage 10G 40G 40G
-#run_for_data_all $1 TCGA-BRCA ajcc_tumor_pathologic_pt 10G 40G 40G
-#run_for_data_all $1 TCGA-BRCA ajcc_nodes_pathologic_pn 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA er_status_by_ihc 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_pathologic_tumor_stage 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_tumor_pathologic_pt 10G 40G 40G
+run_for_data_all $1 TCGA-BRCA ajcc_nodes_pathologic_pn 10G 40G 40G
 
-#run_for_data_all $1 TCGA-COAD ajcc_pathologic_tumor_stage 10G 40G 20G
-#run_for_data_all $1 TCGA-COAD ajcc_tumor_pathologic_pt 10G 40G 20G
-#run_for_data_all $1 TCGA-COAD ajcc_nodes_pathologic_pn 10G 40G 20G
+run_for_data_all $1 TCGA-COAD ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-COAD ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-COAD ajcc_nodes_pathologic_pn 10G 40G 20G
 
-#run_for_data_all $1 TCGA-KIRC ajcc_pathologic_tumor_stage 10G 40G 20G
-#run_for_data_all $1 TCGA-KIRC ajcc_tumor_pathologic_pt 10G 40G 20G
-#run_for_data_all $1 TCGA-KIRC ajcc_nodes_pathologic_pn 10G 40G 20G
-#run_for_data_all $1 TCGA-KIRC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC ajcc_nodes_pathologic_pn 10G 40G 20G
+run_for_data_all $1 TCGA-KIRC vital_status 10G 40G 20G
 
-#run_for_data_all $1 TCGA-LIHC ajcc_pathologic_tumor_stage 10G 40G 20G
-#run_for_data_all $1 TCGA-LIHC ajcc_tumor_pathologic_pt 10G 40G 20G
-#run_for_data_all $1 TCGA-LIHC ajcc_nodes_pathologic_pn 10G 40G 20G
-#run_for_data_all $1 TCGA-LIHC vital_status 10G 40G 20G
-#run_for_data_all $1 TCGA-LIHC tumor_grade 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC ajcc_pathologic_tumor_stage 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC ajcc_tumor_pathologic_pt 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC ajcc_nodes_pathologic_pn 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC vital_status 10G 40G 20G
+run_for_data_all $1 TCGA-LIHC tumor_grade 10G 40G 20G
 
 run_for_data_all $1 ICGC-LYMPH-DE foll_dlbcl 10G 20G 20G
 

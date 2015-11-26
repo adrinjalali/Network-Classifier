@@ -327,5 +327,25 @@ if __name__ == '__main__':
 
         dump_scores(score_dump_file, all_scores)
         
+    if method == 'all' or method == 'raccoon_static':
+        log('raccoon_static')
+        import sklearn.svm
+        model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count, dynamic_features = False)
+        model.fit(Xtrain, ytrain)
+        predictor = sklearn.svm.SVC()
+        param_dist = {'C': pow(2.0, np.arange(-10, 11)), 'gamma': pow(2.0, np.arange(-10, 11)),
+                      'kernel': ['linear', 'rbf']}
+        test_results = model.predict(Xtest, model=predictor, param_dist=param_dist)
+        scores = sklearn.metrics.average_precision_score(ytest, [k['decision_function'][0] for k in test_results])
+        
+        log('raccoon-static\t%s' % (scores))
+        this_method = 'Raccoon_static'
+        all_scores[this_method] = [scores]
+
+        log()
+        print_scores(all_scores)
+
+        dump_scores(score_dump_file, all_scores)
+        
     print('bye', file=sys.stderr)
 

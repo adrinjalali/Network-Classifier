@@ -121,14 +121,13 @@ def load_data():
     X = X[:,rearrange_indices]
 
     print("creating graph from network data...");
-    node_indices_t = bidict.namedbidict('node_indices_t', 'entrezids', 'indices')
-    node_indices = node_indices_t({common_genes_list[x]:x
-                                   for x in range(len(common_genes_list))})
+    node_indices = {common_genes_list[x]:x
+                                   for x in range(len(common_genes_list))}
     g = gt.Graph(directed=False);
     vlist = g.add_vertex(len(node_indices))
     for i in range(interactions.shape[0]):
-        tmp_e = g.add_edge(node_indices.entrezids[interactions[i,0]],
-                           node_indices.entrezids[interactions[i,1]])
+        tmp_e = g.add_edge(node_indices[interactions[i,0]],
+                           node_indices[interactions[i,1]])
 
     print("reading sample descriptions and setting Y...")
     descriptions_raw = read_csv(Globals.description_file, True)

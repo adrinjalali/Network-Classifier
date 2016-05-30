@@ -16,14 +16,14 @@ import pickle
 
 def load_data():
     print('reading data files')
-
-    expression_data_file = '/home/adrin/Projects/Data/ICGC-LYMPH-DE/filtered_expressions.tsv'
+    root_dir = '/TL/stat_learn/work/ajalali/Data/ICGC-LYMPH-DE'
+    expression_data_file = root_dir + '/filtered_expressions.tsv'
     edata = pandas.read_csv(expression_data_file, sep='\t', low_memory=False)
 
-    donor_info_file = '/home/adrin/Projects/Data/ICGC-LYMPH-DE/donor.tsv'
+    donor_info_file = root_dir + '/donor.tsv'
     donor_info = pandas.read_csv(donor_info_file, sep='\t')
 
-    ensembl2genename_fle = '/home/adrin/Projects/Data/ICGC-LYMPH-DE/ensembl2genename.txt'
+    ensembl2genename_fle = root_dir + '/ensembl2genename.txt'
     ensembl2genename = pandas.read_csv(ensembl2genename_fle, sep='\t')
 
     #ppi_file = '/home/adrin/Projects/Data/PPI/HPRD/HPRD_Release9_062910/just_genes.csv'
@@ -33,12 +33,14 @@ def load_data():
 
     donor_info['label'] = ''
     FOLL_icd10 = ['C82', 'C82.0', 'C82.1', 'C82.2', 'C82.3', 'C82.4']
+    FOLL_label = -1
     for i in FOLL_icd10:
-        donor_info.loc[donor_info["donor_diagnosis_icd10"] == i, 'label'] = 'FOLL'
+        donor_info.loc[donor_info["donor_diagnosis_icd10"] == i, 'label'] = FOLL_label
 
     DLBCL_icd10 = ['C83.3']
+    DLBCL_label = 1
     for i in DLBCL_icd10:
-        donor_info.loc[donor_info["donor_diagnosis_icd10"] == i, 'label'] = 'DLBCL'
+        donor_info.loc[donor_info["donor_diagnosis_icd10"] == i, 'label'] = DLBCL_label
 
     donors = np.unique(edata['icgc_sample_id'])
     groups = edata.groupby(['icgc_donor_id', 'icgc_sample_id'])
@@ -49,8 +51,8 @@ def load_data():
 
     gene_set = None
     for i in range(b.shape[0]):
-        if any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == 'DLBCL') \
-            or any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == 'FOLL'):
+        if any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == DLBCL_label) \
+            or any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == FOLL_label):
             print(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], ['icgc_donor_id', 'label']])
             print(edata.ix[groups.groups[(b[i, 0], b[i, 1])]].shape)
 
@@ -67,8 +69,8 @@ def load_data():
     data = pandas.DataFrame(columns=list(gene_set))
     donor_ids = list()
     for i in range(b.shape[0]):
-        if any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == 'DLBCL') \
-            or any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == 'FOLL'):
+        if any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == DLBCL_label) \
+            or any(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], 'label'] == FOLL_label):
             print(donor_info.loc[donor_info['icgc_donor_id'] == b[i, 0], ['icgc_donor_id', 'label']])
             print(edata.ix[groups.groups[(b[i, 0], b[i, 1])]].shape)
 

@@ -32,7 +32,6 @@ process_problem TCGA-SARC residual_tumor $1
 process_problem TCGA-SARC vital_status $1
 process_problem TCGA-SARC tumor_status $1
 
-
 process_problem TCGA-THCA tumor_focality $1
 process_problem TCGA-THCA ajcc_pathologic_tumor_stage $1
 
@@ -59,4 +58,6 @@ process_problem TCGA-LIHC ajcc_tumor_pathologic_pt $1
 process_problem TCGA-LIHC ajcc_nodes_pathologic_pn $1
 process_problem TCGA-LIHC vital_status $1
 process_problem TCGA-LIHC tumor_grade $1
+
+process_problem ICGC-LYMPH-DE foll_dlbcl $1
 

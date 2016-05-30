@@ -157,6 +157,44 @@ if __name__ == '__main__':
                         'histologic_diagnosis': {-1: 'Astrocytoma',
                                                  1: 'Oligodendroglioma'},
                         'tumor_grade': {-1: 'G2', 1:'G3'}}
+    elif (data_name == 'TCGA-COAD'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-COAD/'
+        sample_type = '01A'
+        target_labels = {'ajcc_tumor_pathologic_pt': {-1: ['T1', 'T2'], 1: ['T3', 'T4']},
+                         'ajcc_nodes_pathologic_pn': {-1: 'N0', 1: ['N1', 'N2', 'N3', 'NX']},
+                         'ajcc_pathologic_tumor_stage': {1: ['Stage I', 'Stage II', 'Stage IIA', 'Stage IIB', 'Stage IIC'],
+                                                         -1: ['Stage III', 'Stage IIIA', 'Stage IIIB', 'Stage IIIC',
+                                                              'Stage IV',
+                                                              'Stage IVA',
+                                                              'stage IVB',
+                                                              'Stage IVC']}}
+    elif (data_name == 'TCGA-KIRC'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-KIRC/'
+        sample_type = '01A'
+        target_labels = {'ajcc_tumor_pathologic_pt': {-1: ['T1'], 1: ['T2', 'T3', 'T4']},
+                         'vital_status': {-1:'Dead', 1:'Alive'},
+                         'ajcc_nodes_pathologic_pn': {-1: 'N0', 1: ['N1', 'N2', 'N3', 'NX']},
+                         'ajcc_pathologic_tumor_stage': {1: ['Stage I'],
+                                                         -1: ['Stage II',
+                                                              'Stage III', 'Stage IIIA', 'Stage IIIB', 'Stage IIIC',
+                                                              'Stage IV',
+                                                              'Stage IVA',
+                                                              'stage IVB',
+                                                              'Stage IVC']}}
+    elif (data_name == 'TCGA-LIHC'):
+        input_dir = '/TL/stat_learn/work/ajalali/Data/TCGA-LIHC/'
+        sample_type = '01A'
+        target_labels = {'ajcc_tumor_pathologic_pt': {-1: ['T0', 'T1'], 1: ['T2', 'T3', 'T4', 'TX']},
+                         'tumor_grade': {-1: ['G1', 'G2'], 1: ['G3', 'G4']},
+                         'vital_status': {-1:'Dead', 1:'Alive'},
+                         'ajcc_nodes_pathologic_pn': {-1: 'N0', 1: ['N1', 'N2', 'N3', 'NX']},
+                         'ajcc_pathologic_tumor_stage': {1: ['Stage I'],
+                                                         -1: ['Stage II',
+                                                              'Stage III', 'Stage IIIA', 'Stage IIIB', 'Stage IIIC',
+                                                              'Stage IV',
+                                                              'Stage IVA',
+                                                              'stage IVB',
+                                                              'Stage IVC']}}
     
     data = read_tcga.load_data(input_dir = input_dir,
                 sample_type = sample_type,

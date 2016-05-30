@@ -387,7 +387,11 @@ if __name__ == '__main__':
 
     print_scores(all_scores)
 
-    methods = ['Gradient Boosting Classifier', 'SVM', 'Raccoon', 'Adaboost', 'RatBoost']
+    methods = ['Gradient Boosting Classifier', 'SVM', 'Raccoon', 'Raccoon_static', 'Adaboost', 'RatBoost']
+    print_summary(all_scores, methods)
+    methods = ['Gradient Boosting Classifier', 'SVM', 'Raccoon', 'Raccoon_static', 'Adaboost']
+    print_summary(all_scores, methods)
+    methods = ['Raccoon', 'Raccoon_static']
     print_summary(all_scores, methods)
 
     #draw_plots(all_scores)

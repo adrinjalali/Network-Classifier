@@ -10,6 +10,7 @@ you probably want to use only load_data function only!
 
 import numpy as np
 import os
+import pickle
 import subprocess
 import glob
 import graph_tool as gt;
@@ -272,7 +273,10 @@ def dump_by_target_label(X, target_labels, patient_annot,
         tmp_annot = tmp_annot[final_sample_indices,:]
         tmp_sample_indices = sample_indices[final_sample_indices]
 
-        X_prime = tmp_X.dot(L)
+        if L is not None:
+            X_prime = tmp_X.dot(L)
+        else:
+            X_prime = None
 
         tmp_dump_dir = dump_dir + '/' + key
         if (not os.path.exists(tmp_dump_dir)):
@@ -319,7 +323,7 @@ patient_annot_file can easily be found from the Clinical folder, no need to be g
 '''
 def load_data(input_dir,
               target_labels, sample_type=None, patient_annot_file=None,
-              final_dump_folder = None):
+              final_dump_folder = None, networkize_data = False):
     if (sample_type == None):
         print("sample type must be given. For example 01A (as suffix to patient codes.)")
         return
@@ -405,6 +409,17 @@ def load_data(input_dir,
                  methylation_45k_sample_indices = sample_indices)
 
 
+    """
+    Don't use the PPI network if no network is needed, and return raw
+    beta values.
+    """
+    if not networkize_data:
+        processed_data = dump_by_target_label(betas, target_labels, patient_annot,
+                        patient_annot_colnames, sample_indices, None,
+                        dump_dir)
+
+        return (processed_data, None, col_names)
+    
     '''
         use the graph to map nodes to genes and get the graph itself.
     '''
@@ -444,8 +459,8 @@ def load_data(input_dir,
         dump_dir = final_dump_folder
         
     processed_data = dump_by_target_label(X, target_labels, patient_annot,
-        patient_annot_colnames, sample_indices, L,
-        dump_dir)
+                        patient_annot_colnames, sample_indices, L,
+                        dump_dir)
 
     return (processed_data, g, genes)
     

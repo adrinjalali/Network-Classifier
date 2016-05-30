@@ -27,8 +27,11 @@ process_problem_sep_2014(){
 
 
 # for batch based cv:
-process_problem_sep_2014 $1 TCGA-BRCA
+#process_problem_sep_2014 $1 TCGA-BRCA
 #process_problem_sep_2014 $1 TCGA-UCEC
 #process_problem_sep_2014 $1 TCGA-THCA
 #process_problem_sep_2014 $1 TCGA-SARC
 #process_problem_sep_2014 $1 TCGA-LGG
+process_problem_sep_2014 $1 TCGA-COAD
+process_problem_sep_2014 $1 TCGA-KIRC
+process_problem_sep_2014 $1 TCGA-LIHC

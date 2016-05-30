@@ -10,7 +10,7 @@ from common import FCE
 
 
 class Raccoon:
-    def __init__(self, verbose=0, logger=None, n_jobs=1):
+    def __init__(self, verbose=0, logger=None, n_jobs=1, dynamic_features=True):
         self.features = None
         self.FCEs = dict()
         self.verbose = verbose
@@ -18,6 +18,7 @@ class Raccoon:
         self.Xtrain = None
         self.ytrain = None
         self.normalizer = None
+        self.dynamic_features = dynamic_features
         if logger is None:
             self.logger = print
         else:
@@ -58,6 +59,10 @@ class Raccoon:
         if self.verbose > 0:
             self.logger("%d features selected. Fitting feature confidence estimators" % (len(self.features)))
 
+        if self.dynamic_features == False:
+            self.logger("Done.")
+            return
+        
         self.FCEs = dict()
         i = 0
         for f in self.features:
@@ -78,6 +83,25 @@ class Raccoon:
 
         X = self.normalizer.transform(X)
 
+        if self.dynamic_features == False:
+            if self.verbose > 0:
+                self.logger("training the model")
+                
+            random_search = sklearn.grid_search.RandomizedSearchCV(model, param_distributions=param_dist,
+                                                                   n_iter=100, n_jobs=self.n_jobs, cv=10,
+                                                                   verbose=0)
+            random_search.fit(self.Xtrain[:, self.features], self.ytrain)
+            results = list()
+            for i in range(X.shape[0]):
+                results.append({'model': random_search, 'confidences': None,
+                            'selected_features': None,
+                            'prediction': random_search.predict(X[i, self.features]),
+                            'decision_function': random_search.decision_function(X[i, self.features])})
+
+            if self.verbose > 0:
+                self.logger("predict done.")
+            return results
+            
         results = list()
         for i in range(X.shape[0]):
             if self.verbose > 0:

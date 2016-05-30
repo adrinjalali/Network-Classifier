@@ -8,7 +8,7 @@ from graph_tool import draw;
 from graph_tool import spectral;
 from graph_tool import stats;
 from sklearn import svm;
-from sklearn import cross_validation as cv;
+from sklearn import cross_validation as cv
 from sklearn.metrics import roc_auc_score;
 from sklearn.grid_search import GridSearchCV
 import sklearn.ensemble

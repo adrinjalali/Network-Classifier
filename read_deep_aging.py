@@ -150,7 +150,8 @@ if __name__ == "__main__":
     
 
     print('raccoon')
-    model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count)
+    model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count,
+                                         FCE_type='PredictBasedFCE')
     model.fit(Xtrain, Ytrain)
     predictor = sklearn.svm.SVR()
     params = {'C': pow(2.0, np.arange(-10, 11)),

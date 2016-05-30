@@ -10,7 +10,11 @@ from common import FCE
 
 
 class Raccoon:
-    def __init__(self, verbose=0, logger=None, n_jobs=1, dynamic_features=True):
+    """
+    FCE_type in: {"RidgeBasedFCE", "PredictBasedFCE"}
+    """
+    def __init__(self, verbose=0, logger=None, n_jobs=1, dynamic_features=True,
+                 FCE_type = 'RidgeBasedFCE'):
         self.features = None
         self.FCEs = dict()
         self.verbose = verbose
@@ -23,6 +27,7 @@ class Raccoon:
             self.logger = print
         else:
             self.logger = logger
+        self.FCE_type = FCE_type
 
     def fit(self, X, y):
         #normalizer = sklearn.preprocessing.Normalizer().fit(X)
@@ -69,7 +74,17 @@ class Raccoon:
             i += 1
             if self.verbose > 0:
                 self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
-            fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs, verbose=self.verbose)
+
+            if self.FCE_type == 'RidgeBasedFCE':
+                fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs,
+                                        verbose=self.verbose)
+            elif self.FCE_type == 'PredictBasedFCE':
+                fce = FCE.PredictBasedFCE(feature_count=10, n_jobs=self.n_jobs,
+                                          logger=self.logger,
+                                          verbose=self.verbose)
+            else:
+                raise Exception("FCE_type unknown")
+            
             fce.fit(X, f)
             self.FCEs[f] = fce
 

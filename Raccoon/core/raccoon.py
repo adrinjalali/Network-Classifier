@@ -25,9 +25,9 @@ class Raccoon:
             self.logger = logger
 
     def fit(self, X, y):
-        normalizer = sklearn.preprocessing.Normalizer().fit(X)
-        self.normalizer = normalizer
-        X = self.normalizer.transform(X)
+        #normalizer = sklearn.preprocessing.Normalizer().fit(X)
+        #self.normalizer = normalizer
+        #X = self.normalizer.transform(X)
         self.Xtrain = X
         self.ytrain = y
 
@@ -42,7 +42,7 @@ class Raccoon:
         for train, test in inner_cv:
             inner_xtrain = X[train, :]
             inner_ytrain = y[train]
-            tmp = [scipy.stats.stats.pearsonr(inner_ytrain, inner_xtrain[:, i])
+            tmp = [np.abs(scipy.stats.stats.pearsonr(inner_ytrain, inner_xtrain[:, i]))
                    for i in range(inner_xtrain.shape[1])]
             tmp = np.array(tmp)
             threshold_1000 = np.sort(tmp[:, 1])[1000]
@@ -81,7 +81,7 @@ class Raccoon:
         if X.ndim == 1:
             X = X.reshape(1, -1)
 
-        X = self.normalizer.transform(X)
+        #X = self.normalizer.transform(X)
 
         if self.dynamic_features == False:
             if self.verbose > 0:

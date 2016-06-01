@@ -150,6 +150,15 @@ if __name__ == "__main__":
     
 
     print('raccoon')
+    model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count)
+    model.fit(Xtrain, Ytrain)
+    predictor = sklearn.svm.SVR()
+    params = {'C': pow(2.0, np.arange(-10, 11)),
+              'gamma': pow(2.0, np.arange(-10, 11)),
+              'kernel': ['linear', 'rbf']}
+
+
+        
     model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count,
                                          FCE_type='PredictBasedFCE')
     model.fit(Xtrain, Ytrain)
@@ -160,3 +169,23 @@ if __name__ == "__main__":
     test_results = model.predict(Xtest, model=predictor, param_dist=params)
     scores = sklearn.metrics.average_precision_score(ytest, [k['decision_function'][0] for k in test_results])
 
+
+    import cProfile, pstats, io
+    import common.rdc
+    f = 3721
+    pr = cProfile.Profile()
+    pr.enable()
+    garbage = [common.rdc.rdc(Xtrain[:,f], Xtrain[:,i]) for i in range(200)]
+    pr.disable()
+    
+    s = io.StringIO()
+    sortby = 'cumulative'
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
+
+    rdcs = [common.rdc.rdc(Xtrain[:,f], Xtrain[:,i]) for i in range(Xtrain.shape[1])]
+    from joblib import Parallel, delayed
+    rdcs2 = Parallel(n_jobs=cpu_count, backend="threading")(
+        delayed(common.rdc.rdc)(Xtrain[:,f], Xtrain[:,i])
+        for i in range(Xtrain.shape[1]))

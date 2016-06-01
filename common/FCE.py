@@ -1,5 +1,6 @@
 # FCE: feature confidence extimator
 import math
+import heapq
 
 import sklearn
 import sklearn.kernel_ridge
@@ -109,10 +110,10 @@ class PredictBasedFCE(BaseEstimator):
     '''
     def __init__(self, feature_count=10, n_jobs=1,
                  logger=None, verbose=0):
-        self._learner = gp.GaussianProcess(nugget=1e-1, optimizer='Welch',
-                                           random_start = 10)
+        self._learner = gp.GaussianProcessRegressor(alpha=1e-2, n_restarts_optimizer=5)
         self.feature_count = feature_count
         self.n_jobs = n_jobs
+        #self.n_jobs = 1 # no gain was observed with multithreading
         if logger is None:
             self.logger = print
         else:
@@ -134,12 +135,15 @@ class PredictBasedFCE(BaseEstimator):
         my_y = X[:, self.feature]
 
         if self.n_jobs > 1:
-            scores = Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
+            scores = Parallel(n_jobs=self.n_jobs, backend="threading")(
                 delayed(rdc)(X[:,self.feature], my_X[:,i])
                 for i in range(my_X.shape[1]))
         else:
             scores = [rdc(my_y, my_X[:,i])
                       for i in range(my_X.shape[1])]
+
+        if self.verbose > 0:
+            self.logger("rdc scores calculated")
 
         scores = np.array(scores)
         scores[np.isnan(scores)] = 0
@@ -167,12 +171,13 @@ class PredictBasedFCE(BaseEstimator):
         MINE object, but it drastically increases the computation
         time, and the ordering of the features doesn't change much.
         '''
-        res = (np.arange(len(scores))[scores >
-                                           np.max(scores) * 0.90])
-        if (res.shape[0] < 5):
-            res = (np.array([t[0] for t in heapq.nlargest(5,
-                                                          enumerate(scores),
-                                                          lambda t:t[1])]))
+        #res = (np.arange(len(scores))[scores >
+        #                                   np.max(scores) * 0.90])
+        #if (res.shape[0] < 5):
+        
+        res = (np.array([t[0] for t in heapq.nlargest(k,
+                                                      enumerate(scores),
+                                                      lambda t:t[1])]))
         return(res)
 
     def predict(self, X):

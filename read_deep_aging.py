@@ -40,7 +40,9 @@ if __name__ == "__main__":
         Xtest = tmp['Xtest']
         Ytrain = tmp['Ytrain']
         Ytest = tmp['Ytest']
+        interesting_samples = tmp['interesting_samples']
         del tmp
+        
     else:
         annot = pandas.read_csv(annot_file)
     
@@ -55,17 +57,20 @@ if __name__ == "__main__":
         Ytrain = np.array(tmpY['age'])
         Ytrain = Ytrain.astype('f')
     
+        tmpY = pandas.read_csv(raw_dir + "test_phenotype_info.csv")
+        interesting_samples = np.array(tmpY['tissue'] == 'Brain CRBM')
+        tmpY = tmpY[interesting_samples]
+        Ytest = np.array(tmpY['age'])
+        Ytest = Ytest.astype('f')
+
         tmpX = pandas.read_csv(raw_dir + "test_set.csv")
         Xtest = np.array(tmpX)
         marker_names_test = Xtest[:, 0]
         Xtest = Xtest[:, 1:]
         Xtest = Xtest.transpose()
+        Xtest = Xtest[np.array(interesting_samples), :]
         Xtest = Xtest.astype('f')
         
-        tmpY = pandas.read_csv(raw_dir + "test_phenotype_info.csv")
-        Ytest = np.array(tmpY['age'])
-        Ytest = Ytest.astype('f')
-
         del tmpX
         del tmpY
         gc.collect()
@@ -113,8 +118,12 @@ if __name__ == "__main__":
         Xtrain = (Xtrain - means) / stds
         Xtest = (Xtest - means) / stds
         np.savez_compressed(proc_data_file, Xtrain=Xtrain, Xtest=Xtest,
-                            Ytrain=Ytrain, Ytest=Ytest)
+                            Ytrain=Ytrain, Ytest=Ytest,
+                            interesting_samples=interesting_samples)
 
+
+    Xtest = Xtest[interesting_samples, :]
+    Ytest = Ytest[interesting_samples]
 
     print('svms')
     #model = sklearn.svm.SVR(kernel='linear', C=.003)
@@ -132,7 +141,8 @@ if __name__ == "__main__":
                                                      cv=10,
                                                      verbose=3)
     machine.fit(Xtrain, Ytrain)
-    sklearn.metrics.r2_score(Ytest, machine.predict(Xtest))
+    predicted = machine.predict(Xtest)
+    sklearn.metrics.r2_score(Ytest, predicted)
     # returns 0.81601599268590863
 
     print('l1-svm')
@@ -162,11 +172,13 @@ if __name__ == "__main__":
     model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count,
                                          FCE_type='PredictBasedFCE')
     model.fit(Xtrain, Ytrain)
+    
     predictor = sklearn.svm.SVR()
     params = {'C': pow(2.0, np.arange(-10, 11)),
               'gamma': pow(2.0, np.arange(-10, 11)),
               'kernel': ['linear', 'rbf']}
-    test_results = model.predict(Xtest, model=predictor, param_dist=params)
+    #test_results = model.predict(Xtest[0:1,:], model=predictor, param_dist=params)
+    predicted = model.predict(Xtest, model=predictor, param_dist=params)
     scores = sklearn.metrics.average_precision_score(ytest, [k['decision_function'][0] for k in test_results])
 
 

@@ -135,7 +135,7 @@ class PredictBasedFCE(BaseEstimator):
         my_y = X[:, self.feature]
 
         if self.n_jobs > 1:
-            scores = Parallel(n_jobs=self.n_jobs, backend="threading")(
+            scores = Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
                 delayed(rdc)(X[:,self.feature], my_X[:,i])
                 for i in range(my_X.shape[1]))
         else:
@@ -185,8 +185,8 @@ class PredictBasedFCE(BaseEstimator):
         if (X.ndim == 1):
             X = X.reshape(1, -1)
         
-        my_X = X[:,self.getFeatures()]
-        return(self._learner.predict(my_X))
+        my_X = Misc.exclude_cols(X, self.feature)
+        return(self._learner.predict(my_X[:,self._selected_features]))
         
     def getConfidence(self, X):
         def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
@@ -196,8 +196,9 @@ class PredictBasedFCE(BaseEstimator):
         if (X.ndim == 1):
             X = X.reshape(1, -1)
         
-        my_X = X[:,self.getFeatures()]
-        y_pred, sigma2_pred = self._learner.predict(my_X, eval_MSE=True)
+        my_X = Misc.exclude_cols(X, self.feature)
+        y_pred, sigma2_pred = self._learner.predict(my_X[:,self._selected_features],
+                                                    return_std=True)
         res = []
         for i in range(len(y_pred)):
             standardized_x = (X[i, self.feature] -

@@ -41,7 +41,7 @@ class Raccoon:
 
         # calculate pearson correlation and respective p-values
         # select the ones with a p-value < 0.05
-        inner_cv = cv.StratifiedKFold(y, n_folds=5)
+        inner_cv = cv.KFold(len(y), n_folds=5)
         i = 0
         features = set(np.arange(X.shape[1]))
         for train, test in inner_cv:
@@ -50,17 +50,18 @@ class Raccoon:
             tmp = [np.abs(scipy.stats.stats.pearsonr(inner_ytrain, inner_xtrain[:, i]))
                    for i in range(inner_xtrain.shape[1])]
             tmp = np.array(tmp)
-            threshold_1000 = np.sort(tmp[:, 1])[1000]
-            threshold = min(threshold_1000, 0.05)
+            threshold_5000 = np.sort(tmp[:, 1])[5000]
+            threshold = min(threshold_5000, 0.05)
             if self.verbose > 0:
-                self.logger("threshold 1000, threshold: %g %g" % (threshold_1000, threshold))
+                self.logger("threshold 5000, threshold: %g %g" % (threshold_5000, threshold))
                 
             features = features.intersection(set(np.arange(tmp.shape[0])[abs(tmp[:, 1]) < threshold]))
             if self.verbose > 0:
                 self.logger("new features length: %d" % len(features))
 
         self.features = np.array(list(features))
-
+        #self.features = self.features[0:3] #debuging
+        
         if self.verbose > 0:
             self.logger("%d features selected. Fitting feature confidence estimators" % (len(self.features)))
 
@@ -110,8 +111,8 @@ class Raccoon:
             for i in range(X.shape[0]):
                 results.append({'model': random_search, 'confidences': None,
                             'selected_features': None,
-                            'prediction': random_search.predict(X[i, self.features]),
-                            'decision_function': random_search.decision_function(X[i, self.features])})
+                            'prediction': random_search.predict(X[i, self.features].reshape(1, -1)),
+                            'decision_function': random_search.decision_function(X[i, self.features].reshape(1, -1))})
 
             if self.verbose > 0:
                 self.logger("predict done.")
@@ -137,7 +138,7 @@ class Raccoon:
                 self.logger("Max and min confidences: %f, %f" % (max_confidence, min_confidence))
 
             best_threshold = None
-            best_score = 0
+            best_score = -float("inf")
             for threshold in [0.2, 0.4, 0.6, 0.8]:
                 selected_features = [key for (key, value) in confidences.items()
                                      if value > min_confidence + (max_confidence - min_confidence) * threshold]
@@ -174,8 +175,8 @@ class Raccoon:
 
             results.append({'model': random_search, 'confidences': confidences,
                             'selected_features': selected_features,
-                            'prediction': random_search.predict(X[i, selected_features]),
-                            'decision_function': random_search.decision_function(X[i, selected_features])})
+                            'prediction': random_search.predict(X[i, selected_features].reshape(1, -1)),
+                            'decision_function': random_search.decision_function(X[i, selected_features].reshape(1, -1))})
 
         return results
 

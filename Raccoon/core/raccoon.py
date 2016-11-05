@@ -71,23 +71,40 @@ class Raccoon:
         
         self.FCEs = dict()
         i = 0
-        for f in self.features:
-            i += 1
-            if self.verbose > 0:
-                self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
+        if self.FCE_type == 'RidgeBasedFCE':
+            for f in self.features:
+                i += 1
+                if self.verbose > 0:
+                    self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
 
-            if self.FCE_type == 'RidgeBasedFCE':
                 fce = FCE.RidgeBasedFCE(self.logger, n_jobs=self.n_jobs,
                                         verbose=self.verbose)
-            elif self.FCE_type == 'PredictBasedFCE':
+            
+                fce.fit(X, f)
+                self.FCEs[f] = fce
+
+        elif self.FCE_type == 'PredictBasedFCE':
+            for f in self.features:
+                i += 1
+                if self.verbose > 0: 
+                    self.logger("%d / %d fitting RDCs for feature %d" % (i, self.features.shape[0], f))
+
                 fce = FCE.PredictBasedFCE(feature_count=10, n_jobs=self.n_jobs,
                                           logger=self.logger,
                                           verbose=self.verbose)
-            else:
-                raise Exception("FCE_type unknown")
+                fce.fit(X, f, fit_rdcs=True, fit_gp=False)
+                self.FCEs[f] = fce
+
+            i = 0
+            for f, fce in self.FCEs.items():
+                i += 1
+                if self.verbose > 0: 
+                    self.logger("%d / %d fitting FCE for feature %d" % (i, self.features.shape[0], f))
+
+                fce.fit(X, f, fit_rdcs=False, fit_gp=True)
+        else:
+            raise Exception("FCE_type unknown")
             
-            fce.fit(X, f)
-            self.FCEs[f] = fce
 
         if self.verbose > 0:
             self.logger("Done.")

@@ -59,7 +59,7 @@ if __name__ == "__main__":
     
         tmpY = pandas.read_csv(raw_dir + "test_phenotype_info.csv")
         interesting_samples = np.array(tmpY['tissue'] == 'Brain CRBM')
-        tmpY = tmpY[interesting_samples]
+        #tmpY = tmpY[interesting_samples]
         Ytest = np.array(tmpY['age'])
         Ytest = Ytest.astype('f')
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
         marker_names_test = Xtest[:, 0]
         Xtest = Xtest[:, 1:]
         Xtest = Xtest.transpose()
-        Xtest = Xtest[np.array(interesting_samples), :]
+        #Xtest = Xtest[np.array(interesting_samples), :]
         Xtest = Xtest.astype('f')
         
         del tmpX
@@ -127,8 +127,10 @@ if __name__ == "__main__":
 
     print('svms')
     #model = sklearn.svm.SVR(kernel='linear', C=.003)
-    model.fit(Xtrain, Ytrain)
+    #model.fit(Xtrain, Ytrain)
     #sklearn.metrics.r2_score(Ytest, model.predict(Xtest))
+
+    results = dict()
     
     model = sklearn.svm.SVR()
     params = {'C': pow(2.0, np.arange(-10, 11)),
@@ -136,12 +138,16 @@ if __name__ == "__main__":
               'kernel': ['linear', 'rbf']}
     machine = sklearn.grid_search.RandomizedSearchCV(model,
                                                      param_distributions=params,
-                                                     scoring = 'r2',
+                                                     scoring = 'median_absolute_error',
                                                      n_iter=100, n_jobs=cpu_count,
                                                      cv=10,
                                                      verbose=3)
     machine.fit(Xtrain, Ytrain)
     predicted = machine.predict(Xtest)
+    results['svm_predicted'] = predicted
+    sklearn.metrics.median_absolute_error(Ytest, predicted)
+    sklearn.metrics.median_absolute_error(Ytest[interesting_samples], predicted[interesting_samples])
+    # returns 4.xxx or 5.xxx
     sklearn.metrics.r2_score(Ytest, predicted)
     # returns 0.81601599268590863
 
@@ -150,22 +156,28 @@ if __name__ == "__main__":
     params = {'C': pow(2.0, np.arange(-10, 11))}
     machine = sklearn.grid_search.GridSearchCV(model,
                                                param_grid=params,
-                                               scoring = 'r2',
+                                               scoring = 'median_absolute_error',
                                                n_jobs=cpu_count,
                                                cv=10,
                                                verbose=3)
     machine.fit(Xtrain, Ytrain)
+    predicted = machine.predict(Xtest)
+    results['l1svm_predicted'] = predicted
+    sklearn.metrics.median_absolute_error(Ytest, predicted)
+    sklearn.metrics.median_absolute_error(Ytest[interesting_samples], predicted[interesting_samples])
+    # returns something large
     sklearn.metrics.r2_score(Ytest, machine.predict(Xtest))
     # returns -9.6597408915601903
     
 
     print('raccoon')
-    model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count)
-    model.fit(Xtrain, Ytrain)
-    predictor = sklearn.svm.SVR()
-    params = {'C': pow(2.0, np.arange(-10, 11)),
-              'gamma': pow(2.0, np.arange(-10, 11)),
-              'kernel': ['linear', 'rbf']}
+    #model = Raccoon.core.raccoon.Raccoon(verbose=1, logger=log, n_jobs=cpu_count)
+    #model.fit(Xtrain, Ytrain)
+    
+    #predictor = sklearn.svm.SVR()
+    #params = {'C': pow(2.0, np.arange(-10, 11)),
+    #          'gamma': pow(2.0, np.arange(-10, 11)),
+    #          'kernel': ['linear', 'rbf']}
 
 
         

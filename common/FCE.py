@@ -11,6 +11,7 @@ import sklearn.gaussian_process as gp
 from sklearn.base import BaseEstimator
 import scipy.special
 from joblib import Parallel, delayed
+import GPy
 
 from common.misc import Misc
 from common.rdc import rdc
@@ -110,7 +111,7 @@ class PredictBasedFCE(BaseEstimator):
     '''
     def __init__(self, feature_count=10, n_jobs=1,
                  logger=None, verbose=0):
-        self._learner = gp.GaussianProcessRegressor(alpha=1e-2, n_restarts_optimizer=5)
+        #self._learner = gp.GaussianProcessRegressor(alpha=1e-2, n_restarts_optimizer=5)
         self.feature_count = feature_count
         self.n_jobs = n_jobs
         #self.n_jobs = 1 # no gain was observed with multithreading
@@ -119,8 +120,9 @@ class PredictBasedFCE(BaseEstimator):
         else:
             self.logger = logger
         self.verbose = verbose
+        self._selected_features = None
 
-    def fit(self, X, feature):
+    def fit(self, X, feature, fit_rdcs = True, fit_gp = True):
         try:
             feature = int(feature)
         except Exception:
@@ -134,32 +136,42 @@ class PredictBasedFCE(BaseEstimator):
         my_X = Misc.exclude_cols(X, self.feature)
         my_y = X[:, self.feature]
 
-        if self.n_jobs > 1:
-            scores = Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
-                delayed(rdc)(X[:,self.feature], my_X[:,i])
-                for i in range(my_X.shape[1]))
-        else:
-            scores = [rdc(my_y, my_X[:,i])
-                      for i in range(my_X.shape[1])]
+        if fit_rdcs:
+            if self.n_jobs > 1:
+                scores = Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
+                    delayed(rdc)(X[:,self.feature], my_X[:,i])
+                    for i in range(my_X.shape[1]))
+            else:
+                scores = [rdc(my_y, my_X[:,i])
+                        for i in range(my_X.shape[1])]
 
-        if self.verbose > 0:
-            self.logger("rdc scores calculated")
+            if self.verbose > 0:
+                self.logger("rdc scores calculated")
 
-        scores = np.array(scores)
-        scores[np.isnan(scores)] = 0
+            scores = np.array(scores)
+            scores[np.isnan(scores)] = 0
         
-        self._selected_features = self._selectFeatures(scores = scores,
-                                                       k = self.feature_count)
-        #try:
-        self._learner.fit(my_X[:,self._selected_features], my_y)
-        #except:
-        '''    print('gp failed.')
-        print('feature:', feature)
-        print('excluded_feature:', self.excluded_features)
-        print('selected cols:', self._selected_features)
-        print('X.shape, my_X.shape:', X.shape, my_X.shape)
-        raise(RuntimeError('gp failed.'))'''
-        self._trained = True
+            self._selected_features = self._selectFeatures(scores = scores,
+                                                        k = self.feature_count)
+
+
+        if fit_gp:
+            if self._selected_features == None:
+                if self.verbose > 0:
+                    self.logger("you need to fit the rdcs first")
+                raise RuntimeError("you need to fit the rdcs first")
+        
+            cols = len(self._selected_features)
+        
+            if self.verbose > 0:
+                self.logger("training GP with %d input features" % cols)
+            
+            kernel = GPy.kern.Linear(input_dim = cols) + GPy.kern.White(input_dim = cols)
+            self._learner = GPy.models.GPRegression(my_X[:, self._selected_features],
+                                                    my_y.reshape(-1,1), kernel)
+            self._learner.optimize()
+        
+            self._trained = True
         return(self)
         
     def _selectFeatures(self, scores, k = 10):
@@ -186,7 +198,8 @@ class PredictBasedFCE(BaseEstimator):
             X = X.reshape(1, -1)
         
         my_X = Misc.exclude_cols(X, self.feature)
-        return(self._learner.predict(my_X[:,self._selected_features]))
+        mean, _ = self._learner.predict(my_X[:, self._selected_features], full_cov=False, include_likelihood=True)
+        return mean.reshape(-1)
         
     def getConfidence(self, X):
         def phi(x): return(0.5 + 0.5 * scipy.special.erf(x / math.sqrt(2)))
@@ -197,16 +210,11 @@ class PredictBasedFCE(BaseEstimator):
             X = X.reshape(1, -1)
         
         my_X = Misc.exclude_cols(X, self.feature)
-        y_pred, sigma2_pred = self._learner.predict(my_X[:,self._selected_features],
-                                                    return_std=True)
-        res = []
-        for i in range(len(y_pred)):
-            standardized_x = (X[i, self.feature] -
-                              y_pred[i]) / math.sqrt(sigma2_pred[i])
-            res.append(my_score(standardized_x))
-        return(np.array(res))
-        #return(sigma2_pred / (abs(y_pred - X[:,self.feature]) + sigma2_pred))
-        #return(1 / (abs(y_pred - sample[:,self.feature]) + sigma2_pred))
+        mean, var = self._learner.predict(my_X[:, self._selected_features], full_cov=False, include_likelihood=True)
+        y_obs = X[:, self.feature]
+        normalized_y = ((y_obs - mean) / np.sqrt(var)).reshape(-1)
+        yscore = np.array([my_score(iy) for iy in normalized_y])
+        return yscore
 
     def getFeatures(self):
         local_cols = self._selected_features

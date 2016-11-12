@@ -29,7 +29,8 @@ def log(msg=''):
     print('%s\t%s\tcv:%d\t%s' % (d[-2], d[-1], cv_index, msg), file=sys.stderr, flush=True)
 
 if __name__ == "__main__":
-    raw_dir = "/TL/stat_learn/work/ajalali/Data/deep_aging/"
+    #raw_dir = "/TL/stat_learn/work/ajalali/Data/deep_aging/"
+    raw_dir = "/home/adrin/Projects/Data/deep_aging/"
     proc_data_file = '%s/proc_data.npz' % raw_dir
     annot_file = "/TL/stat_learn/work/ajalali/Data/met_annot.csv"
     cpu_count = 40
@@ -195,11 +196,11 @@ if __name__ == "__main__":
 
 
     import cProfile, pstats, io
-    import common.rdc
+    from common.rdc import rdc
     f = 3721
     pr = cProfile.Profile()
     pr.enable()
-    garbage = [common.rdc.rdc(Xtrain[:,f], Xtrain[:,i]) for i in range(200)]
+    garbage = [rdc(Xtrain[:,f], Xtrain[:,i]) for i in range(10)]
     pr.disable()
     
     s = io.StringIO()
@@ -213,3 +214,46 @@ if __name__ == "__main__":
     rdcs2 = Parallel(n_jobs=cpu_count, backend="threading")(
         delayed(common.rdc.rdc)(Xtrain[:,f], Xtrain[:,i])
         for i in range(Xtrain.shape[1]))
+
+    import rpy2.robjects as robjects
+    from rpy2.robjects import numpy2ri
+    numpy2ri.activate()
+    rstring = """
+        library(foreach)
+        library(doParallel)
+
+        rdc <- function(x,y,k=20,s=1/6,f=sin) {
+            x <- cbind(apply(as.matrix(x),2,function(u)rank(u)/length(u)),1)
+            y <- cbind(apply(as.matrix(y),2,function(u)rank(u)/length(u)),1)
+            x <- s/ncol(x)*x%*%matrix(rnorm(ncol(x)*k),ncol(x))
+            y <- s/ncol(y)*y%*%matrix(rnorm(ncol(y)*k),ncol(y))
+            tryCatch(cancor(cbind(f(x),1),cbind(f(y),1))$cor[1], error = function(e){0})
+        }
+
+        rdcs_for_cols <- function(X, cols) {
+            cl<-makeCluster(4)
+            clusterExport(cl, c('rdc'), envir=environment())
+            registerDoParallel(cl)
+            res = list()
+	    res <- foreach (c=cols) %dopar% {
+	        sapply(1:ncol(X), function(i, j) rdc(X[,i], X[,j]), c)
+	    }
+            stopCluster(cl)
+	    return(res)
+        }
+    """
+
+    tmpstr = "function(x) ncol(x)"
+    rtmpf = robjects.r(tmpstr)
+    rtmpf(Xtrain)
+    
+    rfunc=robjects.r(rstring)
+    f = np.array([3721, 100, 200, 300])
+    import cProfile, pstats, io
+    
+    pr = cProfile.Profile()
+    pr.enable()
+    garbage2 = rfunc(Xtrain, f)
+    pr.disable()
+    #[rpy2.robjects.conversion.ri2py(x) for x in garbage[0]]
+    [x[0] for x in garbage[0]]

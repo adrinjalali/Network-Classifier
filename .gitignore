@@ -2,3 +2,5 @@ tmp/
 *.out
 __pycache__/
 **/.idea
+*#
+#*

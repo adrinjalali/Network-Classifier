@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.stats
-import sklearn.cross_decomposition
+#import sklearn.cross_decomposition
 from numpy.linalg import lstsq,eig
 from numpy import cov,dot,arange,c_
 

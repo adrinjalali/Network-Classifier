@@ -3,6 +3,8 @@ import scipy.stats
 #import sklearn.cross_decomposition
 from numpy.linalg import lstsq,eig
 from numpy import cov,dot,arange,c_
+import rpy2.robjects as robjects
+from rpy2.robjects import numpy2ri
 
 def cca(x_tn,y_tm, reg=0.00000001):
     x_tn = x_tn-x_tn.mean(axis=0)
@@ -54,3 +56,33 @@ def rdc(x, y, s=1/6, k=20, f=np.sin):
     result = np.corrcoef(U_c, V_c)[0,1].real
     return result
 
+def R_rdc(X, y):
+    numpy2ri.activate()
+    rstring = """
+        library(foreach)
+        library(doParallel)
+
+        rdc <- function(x,y,k=20,s=1/6,f=sin) {
+            x <- cbind(apply(as.matrix(x),2,function(u)rank(u)/length(u)),1)
+            y <- cbind(apply(as.matrix(y),2,function(u)rank(u)/length(u)),1)
+            x <- s/ncol(x)*x%*%matrix(rnorm(ncol(x)*k),ncol(x))
+            y <- s/ncol(y)*y%*%matrix(rnorm(ncol(y)*k),ncol(y))
+            tryCatch(cancor(cbind(f(x),1),cbind(f(y),1))$cor[1], error = function(e){0})
+        }
+
+        rdcs_for_all <- function(X, y) {
+            cl<-makeCluster(40)
+            clusterExport(cl, c('rdc'), envir=environment())
+            registerDoParallel(cl)
+            res = list()
+	    res <- foreach (c_=c(1:ncol(X))) %dopar% {
+	        rdc(y, X[,c_])
+	    }
+            stopCluster(cl)
+	    return(res)
+        }
+    """ 
+    
+    rfunc=robjects.r(rstring)
+    res = rfunc(X, y)
+    return np.array([x[0] for x in res])

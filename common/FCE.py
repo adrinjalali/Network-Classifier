@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 import GPy
 
 from common.misc import Misc
-from common.rdc import rdc
+from common.rdc import R_rdc
 
 
 class RidgeBasedFCE(BaseEstimator):
@@ -137,6 +137,8 @@ class PredictBasedFCE(BaseEstimator):
         my_y = X[:, self.feature]
 
         if fit_rdcs:
+            scores = R_rdc(my_X, my_y)
+            """
             if self.n_jobs > 1:
                 scores = Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
                     delayed(rdc)(X[:,self.feature], my_X[:,i])
@@ -144,6 +146,7 @@ class PredictBasedFCE(BaseEstimator):
             else:
                 scores = [rdc(my_y, my_X[:,i])
                         for i in range(my_X.shape[1])]
+            """
 
             if self.verbose > 0:
                 self.logger("rdc scores calculated")

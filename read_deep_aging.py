@@ -29,8 +29,8 @@ def log(msg=''):
     print('%s\t%s\tcv:%d\t%s' % (d[-2], d[-1], cv_index, msg), file=sys.stderr, flush=True)
 
 if __name__ == "__main__":
-    #raw_dir = "/TL/stat_learn/work/ajalali/Data/deep_aging/"
-    raw_dir = "/home/adrin/Projects/Data/deep_aging/"
+    raw_dir = "/TL/stat_learn/work/ajalali/Data/deep_aging/"
+    #raw_dir = "/home/adrin/Projects/Data/deep_aging/"
     proc_data_file = '%s/proc_data.npz' % raw_dir
     annot_file = "/TL/stat_learn/work/ajalali/Data/met_annot.csv"
     cpu_count = 40
@@ -230,18 +230,18 @@ if __name__ == "__main__":
             tryCatch(cancor(cbind(f(x),1),cbind(f(y),1))$cor[1], error = function(e){0})
         }
 
-        rdcs_for_cols <- function(X, cols) {
-            cl<-makeCluster(4)
+        rdcs_for_all <- function(X, col) {
+            cl<-makeCluster(40)
             clusterExport(cl, c('rdc'), envir=environment())
             registerDoParallel(cl)
             res = list()
-	    res <- foreach (c=cols) %dopar% {
-	        sapply(1:ncol(X), function(i, j) rdc(X[,i], X[,j]), c)
+	    res <- foreach (c_=c(1:ncol(X))) %dopar% {
+	        rdc(X[,col], X[,c_])
 	    }
             stopCluster(cl)
 	    return(res)
         }
-    """
+    """ 
 
     tmpstr = "function(x) ncol(x)"
     rtmpf = robjects.r(tmpstr)
@@ -249,6 +249,7 @@ if __name__ == "__main__":
     
     rfunc=robjects.r(rstring)
     f = np.array([3721, 100, 200, 300])
+    f = 3721
     import cProfile, pstats, io
     
     pr = cProfile.Profile()
